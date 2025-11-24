@@ -161,6 +161,39 @@ const STRATEGIES: StrategyConfig[] = [
   }
 ];
 
+const mergeDuplicateStrategies = (strategies: SuggestedRole[]): SuggestedRole[] => {
+  // Group strategies by their role signature (sorted, joined role names)
+  const groupsBySignature = new Map<string, SuggestedRole[]>();
+
+  strategies.forEach(strategy => {
+    const signature = [...strategy.roleNames].sort().join(',');
+    if (!groupsBySignature.has(signature)) {
+      groupsBySignature.set(signature, []);
+    }
+    groupsBySignature.get(signature)!.push(strategy);
+  });
+
+  // Build result by merging groups with multiple strategies
+  const uniqueStrategies: SuggestedRole[] = [];
+
+  groupsBySignature.forEach((group, signature) => {
+    if (group.length > 1 && signature !== '') {
+      // Multiple strategies with identical roles - merge them
+      const mergedStrategyNames = group.map(s => s.strategy).join(' / ');
+      uniqueStrategies.push({
+        ...group[0],
+        strategy: mergedStrategyNames,
+        reasoning: 'Multiple strategies produced identical role assignments for this policy.'
+      });
+    } else {
+      // Single strategy or empty signature - keep as is
+      uniqueStrategies.push(group[0]);
+    }
+  });
+
+  return uniqueStrategies;
+};
+
 export const analyzePolicies = (
   policies: AccessPolicyEntry[],
   availableRoles: RoleDefinition[]
@@ -177,9 +210,12 @@ export const analyzePolicies = (
     const requiredActions = getRequiredActions(policy);
 
     // Run all 3 strategies for every policy
-    const recommendations: SuggestedRole[] = STRATEGIES.map(strategy =>
+    const allRecommendations: SuggestedRole[] = STRATEGIES.map(strategy =>
       runWeightedAnalysis(requiredActions, kvRoles, strategy)
     );
+
+    // Merge duplicate strategies with identical outputs
+    const recommendations = mergeDuplicateStrategies(allRecommendations);
 
     return {
       originalPolicy: policy,
