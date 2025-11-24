@@ -101,5 +101,6 @@ export interface ExistingCoverageResult {
   roleMatches: Array<{
     roleName: string;
     covered: string[];
+    excess: string[];
   }>;
 }

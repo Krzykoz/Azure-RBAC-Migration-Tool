@@ -225,7 +225,8 @@ export const analyzeExistingCoverage = (
       if (roleCovered.size > 0) {
         roleMatches.push({
           roleName: roleDef.properties.roleName,
-          covered: Array.from(roleCovered)
+          covered: Array.from(roleCovered),
+          excess: Array.from(e)
         });
       }
     }
