@@ -287,8 +287,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         <div className="space-y-8 fade-in-up">
 
             {/* Overview Charts */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700 h-64">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="md:col-span-3 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700" style={{ height: '392px' }}>
                     <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Confidence Distribution</h4>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={activeData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
@@ -300,14 +300,17 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                 tickLine={false}
                                 axisLine={false}
                                 interval={0}
-                                tickFormatter={(value) => value.length > 10 ? `${value.substring(0, 10)}...` : value}
+                                angle={activeData.length > 10 ? -45 : 0}
+                                textAnchor={activeData.length > 10 ? "end" : "middle"}
+                                height={activeData.length > 10 ? 80 : 30}
+                                tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
                             />
                             <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} unit="%" />
                             <Tooltip
                                 content={<CustomTooltip />}
                                 cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
                             />
-                            <Bar dataKey="confidence" radius={[2, 2, 0, 0]} barSize={30}>
+                            <Bar dataKey="confidence" radius={[2, 2, 0, 0]} barSize={activeData.length > 15 ? 20 : 30}>
                                 {activeData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.confidence > 85 ? '#107c10' : entry.confidence > 60 ? '#ffaa44' : '#d13438'} />
                                 ))}
@@ -316,12 +319,19 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                     </ResponsiveContainer>
                 </div>
 
-                <div className="space-y-4">
+
+                <div className="md:col-span-1 space-y-4">
                     <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                         <div className="text-3xl font-light text-neutral-900 dark:text-white">
                             {Math.round(activeData.reduce((acc, curr) => acc + curr.confidence, 0) / (activeData.length || 1))}%
                         </div>
                         <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Confidence Score</div>
+                    </div>
+                    <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
+                        <div className="text-3xl font-light text-neutral-900 dark:text-white">
+                            {activeData.reduce((acc, curr) => acc + curr.missing, 0)}
+                        </div>
+                        <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Missing Permissions</div>
                     </div>
                     <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                         <div className="text-3xl font-light text-neutral-900 dark:text-white">
