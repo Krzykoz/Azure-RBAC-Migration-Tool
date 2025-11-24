@@ -1,8 +1,6 @@
 import { MigrationAnalysis, IdentityType } from '../types';
 
-/**
- * Generates a CSV export of the analysis results
- */
+
 export const exportToCSV = (
     results: MigrationAnalysis[],
     selectedRoles: Record<string, number>,
@@ -37,9 +35,7 @@ export const exportToCSV = (
     return csvContent;
 };
 
-/**
- * Generates a JSON export of the analysis results
- */
+
 export const exportToJSON = (
     results: MigrationAnalysis[],
     selectedRoles: Record<string, number>,
@@ -74,9 +70,7 @@ export const exportToJSON = (
     return JSON.stringify(exportData, null, 2);
 };
 
-/**
- * Generates a PowerShell script to apply the RBAC role assignments
- */
+
 export const exportToPowerShell = (
     results: MigrationAnalysis[],
     selectedRoles: Record<string, number>,
@@ -138,9 +132,7 @@ Write-Host ""
     return script.join('\n');
 };
 
-/**
- * Downloads a file with the given content
- */
+
 export const downloadFile = (content: string, filename: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);

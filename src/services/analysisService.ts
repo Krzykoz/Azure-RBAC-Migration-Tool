@@ -2,10 +2,10 @@
 import { AccessPolicyEntry, MigrationAnalysis, RoleDefinition, SuggestedRole, RoleBreakdown, RoleAssignment, ExistingCoverageResult } from "../types";
 import RBAC_MAPPING_CSV from "../assets/AcessPolicyRBACMapping.csv?raw";
 
-// Types for the mapping structure: Category -> Action -> Array of RBAC Strings
+
 type PermissionMap = Record<string, Record<string, string[]>>;
 
-// Configuration for the weighted algorithm
+
 interface StrategyConfig {
   name: string;
   description: string;
@@ -17,7 +17,7 @@ interface StrategyConfig {
   threshold: number; // Minimum score required to accept a role
 }
 
-// Parse the CSV file into a structured map
+
 const parsePermissionMap = (csvContent: string): PermissionMap => {
   const map: PermissionMap = {
     keys: {},
@@ -27,7 +27,7 @@ const parsePermissionMap = (csvContent: string): PermissionMap => {
   };
 
   const lines = csvContent.trim().split('\n');
-  // Skip header
+
   const dataLines = lines.slice(1);
 
   dataLines.forEach(line => {
@@ -53,7 +53,7 @@ const parsePermissionMap = (csvContent: string): PermissionMap => {
       map[category] = {};
     }
 
-    // Split RBAC actions by semicolon if multiple exist
+
     const actionsList = rbacActions.split(';').map(s => s.trim());
     map[category][actionRaw] = actionsList;
   });
@@ -63,7 +63,7 @@ const parsePermissionMap = (csvContent: string): PermissionMap => {
 
 const PERMISSION_MAP = parsePermissionMap(RBAC_MAPPING_CSV);
 
-// Collect all known specific RBAC actions from the map for wildcard expansion
+
 const ALL_KNOWN_RBAC_ACTIONS = new Set<string>();
 Object.values(PERMISSION_MAP).forEach(catMap => {
   Object.values(catMap).forEach(actions => {
@@ -75,7 +75,7 @@ function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Helper to check if a role permission (glob pattern) matches a required action
+
 const actionMatches = (roleAction: string, requiredAction: string): boolean => {
   const r = roleAction.toLowerCase();
   const req = requiredAction.toLowerCase();
@@ -93,7 +93,7 @@ const actionMatches = (roleAction: string, requiredAction: string): boolean => {
   return false;
 };
 
-// Convert Access Policy to a Set of RBAC Data Actions
+
 const getRequiredActions = (policy: AccessPolicyEntry): Set<string> => {
   const actions = new Set<string>();
 
@@ -126,7 +126,7 @@ const getRequiredActions = (policy: AccessPolicyEntry): Set<string> => {
   return actions;
 };
 
-// --- ALGORITHM DEFINITIONS ---
+
 
 const STRATEGIES: StrategyConfig[] = [
   {
@@ -184,9 +184,7 @@ export const analyzePolicies = (
     return {
       originalPolicy: policy,
       recommendations: recommendations,
-      // We will populate this later if assignments are provided, 
-      // but for now we can keep the signature compatible or update the caller to pass assignments.
-      // Actually, let's update the signature of analyzePolicies to accept assignments optionally.
+
     };
   });
 };
@@ -247,78 +245,85 @@ export const analyzeExistingCoverage = (
   };
 };
 
-/**
- * Core Weighted Greedy Algorithm
- */
-function runWeightedAnalysis(
+
+export function runWeightedAnalysis(
   required: Set<string>,
   roles: RoleDefinition[],
   config: StrategyConfig
 ): SuggestedRole {
-  const remaining = new Set(required);
-  const selectedRoles: RoleDefinition[] = [];
-  const allCovered = new Set<string>();
-  const allExcess = new Set<string>();
+  const MAX_COMBINATION_SIZE = 5;
+  let bestCombination: RoleDefinition[] = [];
+  let bestScore = -Infinity;
+  let bestCovered = new Set<string>();
+  let bestExcess = new Set<string>();
 
-  const MAX_ROLES = 3; // Limit role combining complexity
-  let iterations = 0;
 
-  while (remaining.size > 0 && iterations < MAX_ROLES) {
-    iterations++;
+  const evaluateCombination = (combo: RoleDefinition[]) => {
+    const combinedCovered = new Set<string>();
+    const combinedExcess = new Set<string>();
 
-    let bestCandidate: RoleDefinition | null = null;
-    let bestScore = -Infinity;
-
-    for (const role of roles) {
-      // 1. Calculate Impact relative to REMAINING needs
-      const { covered: newlyCovered, excess: marginalExcess } = calculateCoverage(remaining, role);
-
-      if (newlyCovered.size === 0) continue;
-
-      // 2. Apply Weights
-      // Score = (Coverage * W_Cov) - (Excess * W_Exc)
-      const score = (newlyCovered.size * config.weights.coverage)
-        - (marginalExcess.size * config.weights.excess);
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestCandidate = role;
-      }
-    }
-
-    // Check Threshold (if the best option is too "expensive" in terms of excess, stop)
-    if (!bestCandidate || bestScore < config.threshold) break;
-
-    selectedRoles.push(bestCandidate);
-
-    // Update State
-    const { covered } = calculateCoverage(remaining, bestCandidate);
-    covered.forEach(c => {
-      remaining.delete(c);
-      allCovered.add(c);
+    combo.forEach(role => {
+      const { covered, excess } = calculateCoverage(required, role);
+      covered.forEach(c => combinedCovered.add(c));
+      excess.forEach(e => combinedExcess.add(e));
     });
 
-    // Global Excess Calculation (Needs to be against TOTAL required, not just remaining)
-    const { excess } = calculateCoverage(required, bestCandidate);
-    excess.forEach(e => allExcess.add(e));
-  }
+    // Score Calculation
+    // Score = (Coverage * W_Cov) - (Excess * W_Exc) - (RoleCount * W_RoleCount)
+    const score = (combinedCovered.size * config.weights.coverage)
+      - (combinedExcess.size * config.weights.excess)
+      - ((combo.length - 1) * config.weights.roleCount); // Penalty for adding more roles
 
-  // Build the role breakdown by calculating what each selected role covers from the TOTAL requirement
-  const roleBreakdown: RoleBreakdown[] = selectedRoles.map(role => {
-    const { covered, excess } = calculateCoverage(required, role);
-    return {
-      roleName: role.properties.roleName,
-      covered: Array.from(covered),
-      excess: Array.from(excess)
-    };
+    if (score > bestScore) {
+      bestScore = score;
+      bestCombination = [...combo]; // Clone the array!
+      bestCovered = combinedCovered;
+      bestExcess = combinedExcess;
+    }
+  };
+
+  // Generate all combinations up to MAX_COMBINATION_SIZE
+
+  const usefulRoles = roles.filter(r => {
+    const { covered } = calculateCoverage(required, r);
+    return covered.size > 0;
   });
 
-  // Final Analysis of the Combination
-  const missing = Array.from(required).filter(x => !allCovered.has(x));
-  const roleNames = selectedRoles.map(r => r.properties.roleName);
 
-  // Fallback if empty
-  if (roleNames.length === 0) {
+  let effectiveLimit = MAX_COMBINATION_SIZE;
+  if (usefulRoles.length > 20) {
+    // If we have many useful roles, cap recursion to 3 to prevent freeze
+    effectiveLimit = 3;
+    console.warn(`Too many useful roles (${usefulRoles.length}). Capping combination depth to 3.`);
+  }
+
+
+  const generateCombinations = (
+    startIdx: number,
+    currentCombo: RoleDefinition[]
+  ) => {
+
+    if (currentCombo.length > 0) {
+      evaluateCombination(currentCombo);
+    }
+
+
+    if (currentCombo.length >= effectiveLimit) {
+      return;
+    }
+
+
+    for (let i = startIdx; i < usefulRoles.length; i++) {
+      currentCombo.push(usefulRoles[i]);
+      generateCombinations(i + 1, currentCombo);
+      currentCombo.pop(); // Backtrack
+    }
+  };
+
+  generateCombinations(0, []);
+
+
+  if (bestCombination.length === 0 || bestScore < config.threshold) {
     return {
       strategy: config.name,
       roleName: 'No Match',
@@ -332,15 +337,28 @@ function runWeightedAnalysis(
     };
   }
 
+
+  const roleBreakdown: RoleBreakdown[] = bestCombination.map(role => {
+    const { covered, excess } = calculateCoverage(required, role);
+    return {
+      roleName: role.properties.roleName,
+      covered: Array.from(covered),
+      excess: Array.from(excess)
+    };
+  });
+
+  const missing = Array.from(required).filter(x => !bestCovered.has(x));
+  const roleNames = bestCombination.map(r => r.properties.roleName);
+
   return {
     strategy: config.name,
     roleName: roleNames.join(' + '),
     roleNames: roleNames,
-    confidence: calculateConfidence(required.size, allCovered.size, allExcess.size),
+    confidence: calculateConfidence(required.size, bestCovered.size, bestExcess.size),
     reasoning: config.description,
-    coveredPermissions: Array.from(allCovered),
+    coveredPermissions: Array.from(bestCovered),
     missingPermissions: missing,
-    excessPermissions: Array.from(allExcess),
+    excessPermissions: Array.from(bestExcess),
     roleBreakdown: roleBreakdown
   };
 }
@@ -367,8 +385,7 @@ function calculateCoverage(required: Set<string>, role: RoleDefinition): { cover
           }
         });
       } else {
-        // Specific action
-        // Check if this specific action is required
+
         const matchesReq = Array.from(required).find(req => req.toLowerCase() === da.toLowerCase());
 
         if (matchesReq) {
