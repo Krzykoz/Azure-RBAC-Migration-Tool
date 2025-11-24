@@ -203,13 +203,17 @@ export const analyzeExistingCoverage = (
   const excess = new Set<string>();
   const roleMatches: Array<{ roleName: string; covered: string[] }> = [];
 
+  const processedRoles = new Set<string>();
+
   userAssignments.forEach(assignment => {
     // Role Definition ID is usually a full path: /subscriptions/.../providers/Microsoft.Authorization/roleDefinitions/GUID
     // or just the GUID.
     const roleDefId = assignment.properties.roleDefinitionId.split('/').pop();
     const roleDef = availableRoles.find(r => r.name === roleDefId);
 
-    if (roleDef) {
+    if (roleDef && !processedRoles.has(roleDef.properties.roleName)) {
+      processedRoles.add(roleDef.properties.roleName);
+
       const roleCovered = new Set<string>();
       const { covered: c, excess: e } = calculateCoverage(requiredActions, roleDef);
 

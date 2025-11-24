@@ -260,7 +260,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                                                     breakdown={res.existingCoverage.roleMatches.map(rm => ({
                                                                         roleName: rm.roleName,
                                                                         covered: rm.covered,
-                                                                        excess: []
+                                                                        excess: rm.excess
                                                                     }))}
                                                                     missing={[]}
                                                                 />
@@ -294,7 +294,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                                                         breakdown={res.existingCoverage.roleMatches.map(rm => ({
                                                                             roleName: rm.roleName,
                                                                             covered: rm.covered,
-                                                                            excess: []
+                                                                            excess: rm.excess
                                                                         }))}
                                                                         missing={res.existingCoverage.missingPermissions}
                                                                     />
