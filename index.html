@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Azure Key Vault RBAC Migrator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['"Segoe UI"', '"Segoe UI Web (West European)"', '-apple-system', 'BlinkMacSystemFont', 'Roboto', 'Helvetica Neue', 'sans-serif'],
+        },
+        extend: {
+          borderRadius: {
+            'none': '0',
+            'sm': '2px',
+            DEFAULT: '4px',
+            'md': '6px',
+            'lg': '8px',
+            'xl': '12px',
+          },
+          colors: {
+            brand: {
+              50: '#eff6fc',
+              100: '#deecf9',
+              200: '#c7e0f4',
+              300: '#50e6ff',
+              400: '#0078d4', // Primary Brand
+              500: '#0078d4',
+              600: '#106ebe', // Hover
+              700: '#005a9e', // Active
+              900: '#004578',
+            },
+            neutral: {
+              50: '#faf9f8',
+              100: '#f3f2f1',
+              200: '#edebe9',
+              300: '#e1dfdd',
+              400: '#d2d0ce',
+              500: '#c8c6c4',
+              600: '#a19f9d',
+              700: '#605e5c',
+              800: '#323130',
+              900: '#201f1e',
+            },
+
+          },
+          boxShadow: {
+            'fluent': '0 1.6px 3.6px 0 rgba(0,0,0,0.132), 0 0.3px 0.9px 0 rgba(0,0,0,0.108)',
+            'fluent-hover': '0 3.2px 7.2px 0 rgba(0,0,0,0.132), 0 0.6px 1.8px 0 rgba(0,0,0,0.108)',
+          }
+        }
+      }
+    }
+  </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+
+</head>
+
+<body class="bg-neutral-100 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 antialiased">
+  <div id="root"></div>
+  <script type="module" src="/src/index.tsx"></script>
+</body>
+
+</html>
