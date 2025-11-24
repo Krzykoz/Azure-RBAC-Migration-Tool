@@ -22,8 +22,8 @@ A browser‑only tool that helps you migrate Azure Key Vault access policies to 
 
 ```bash
 # Clone the repo
-git clone <repository-url>
-cd azure-key-vault-rbac-migrator
+git clone git@github.com:Krzykoz/Azure-RBAC-Migration-Tool.git
+cd Azure-RBAC-Migration-Tool
 
 # Install dependencies
 npm install
@@ -68,6 +68,7 @@ src/
 │   ├─ SidePanel.tsx
 │   ├─ AnalysisResults.tsx
 │   ├─ PermissionVisualizer.tsx
+│   ├─ CoverageBanner.tsx
 │   ├─ Icons.tsx
 │   └─ ErrorBoundary.tsx
 ├─ services/                 # Azure API wrappers

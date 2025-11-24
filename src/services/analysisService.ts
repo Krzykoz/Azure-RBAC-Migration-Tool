@@ -201,7 +201,7 @@ export const analyzeExistingCoverage = (
 
   const covered = new Set<string>();
   const excess = new Set<string>();
-  const roleMatches: Array<{ roleName: string; covered: string[] }> = [];
+  const roleMatches: Array<{ roleName: string; covered: string[]; excess: string[] }> = [];
 
   const processedRoles = new Set<string>();
 
