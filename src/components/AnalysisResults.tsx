@@ -112,6 +112,14 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         }));
     };
 
+    const [showPolicyDetails, setShowPolicyDetails] = React.useState<Record<string, boolean>>({});
+    const togglePolicyDetails = (id: string) => {
+        setShowPolicyDetails(prev => ({
+            ...prev,
+            [id]: !prev[id]
+        }));
+    };
+
     const renderIdentityGroup = (title: string, groupData: MigrationAnalysis[], icon: React.ReactNode) => {
         if (groupData.length === 0) return null;
         return (
@@ -190,6 +198,35 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                                 {/* Fallback message if resolution fails completely and no other info */}
                                                 {!isKnown && !res.originalPolicy.applicationId && (
                                                     <div className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">Resolution Failed</div>
+                                                )}
+
+                                                {/* Original Policy View Toggle */}
+                                                <button
+                                                    onClick={() => togglePolicyDetails(res.originalPolicy.objectId)}
+                                                    className="mt-2 block text-[10px] font-medium text-brand-600 dark:text-brand-400 hover:underline focus:outline-none"
+                                                >
+                                                    {showPolicyDetails[res.originalPolicy.objectId] ? 'Hide Legacy Policy' : 'View Legacy Policy'}
+                                                </button>
+
+                                                {/* Original Policy Details */}
+                                                {showPolicyDetails[res.originalPolicy.objectId] && (
+                                                    <div className="mt-2 p-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded text-[10px]">
+                                                        {Object.entries(res.originalPolicy.permissions).map(([category, perms]) => {
+                                                            if (!perms || perms.length === 0) return null;
+                                                            return (
+                                                                <div key={category} className="mb-1 last:mb-0">
+                                                                    <span className="font-semibold text-neutral-700 dark:text-neutral-300 capitalize">{category}:</span>
+                                                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                        {perms.map(p => (
+                                                                            <span key={p} className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-neutral-600 dark:text-neutral-300">
+                                                                                {p}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -300,9 +337,9 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                 tickLine={false}
                                 axisLine={false}
                                 interval={0}
-                                angle={activeData.length > 10 ? -45 : 0}
-                                textAnchor={activeData.length > 10 ? "end" : "middle"}
-                                height={activeData.length > 10 ? 80 : 30}
+                                angle={-45}
+                                textAnchor="end"
+                                height={80}
                                 tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
                             />
                             <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} unit="%" />
