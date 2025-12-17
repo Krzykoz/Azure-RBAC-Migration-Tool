@@ -4,6 +4,7 @@ import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCirc
 import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { LEGACY_KEY_VAULT_PERMISSIONS } from '../utils/permissionDefinitions';
 
 interface AnalysisResultsProps {
     results: MigrationAnalysis[];
@@ -213,11 +214,28 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                                     <div className="mt-2 p-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded text-[10px]">
                                                         {Object.entries(res.originalPolicy.permissions).map(([category, perms]) => {
                                                             if (!perms || perms.length === 0) return null;
+
+                                                            // Check for "all" and expand if present
+                                                            let displayPerms = perms;
+                                                            if (perms.some(p => p.toLowerCase() === 'all')) {
+                                                                // Import logic handles this, but we need to ensure we have access to the constant here.
+                                                                // Since we can't easily add imports in this chunk, we assume it's imported or available.
+                                                                // Wait, I need to add the import first. 
+                                                                // Actually, I can use a qualified name if I import it at the top, but let's just use the logic here.
+                                                                // I will assume LEGACY_KEY_VAULT_PERMISSIONS is available.
+                                                                const normalizedCategory = category.toLowerCase();
+                                                                // Map 'secret' -> 'secrets', etc if needed, but usually it matches 'keys', 'secrets', 'certificates'
+                                                                // Based on the CSV, the keys in perms are likely 'keys', 'secrets', 'certificates', 'storage'.
+                                                                if (LEGACY_KEY_VAULT_PERMISSIONS[normalizedCategory]) {
+                                                                    displayPerms = LEGACY_KEY_VAULT_PERMISSIONS[normalizedCategory];
+                                                                }
+                                                            }
+
                                                             return (
                                                                 <div key={category} className="mb-1 last:mb-0">
                                                                     <span className="font-semibold text-neutral-700 dark:text-neutral-300 capitalize">{category}:</span>
                                                                     <div className="flex flex-wrap gap-1 mt-0.5">
-                                                                        {perms.map(p => (
+                                                                        {displayPerms.map(p => (
                                                                             <span key={p} className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-neutral-600 dark:text-neutral-300">
                                                                                 {p}
                                                                             </span>
