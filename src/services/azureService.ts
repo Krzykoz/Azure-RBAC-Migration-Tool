@@ -1,5 +1,6 @@
 
 import { Subscription, KeyVault, AccessPolicyEntry, RoleDefinition, IdentityType, RoleAssignment } from '../types';
+import { KEY_VAULT_ALL_PERMISSIONS } from '../utils/permissionDefinitions';
 
 const ARM_ENDPOINT = 'https://management.azure.com';
 const GRAPH_ENDPOINT = 'https://graph.microsoft.com/v1.0';
@@ -314,13 +315,47 @@ export const getKeyVaults = async (token: string, subscriptionId: string): Promi
 
             // Note: ap.displayName might not exist in standard ARM response, 
             // but we check for it just in case the API version or proxy adds it.
+
+            const rawPermissions = ap.permissions || {};
+            const expandedPermissions: Record<string, string[]> = {};
+
+            // Expand "all" to full list (minus Purge) here at the service level
+            Object.entries(rawPermissions).forEach(([category, perms]) => {
+              const normalizedCategory = category.toLowerCase();
+              if (!perms) return;
+
+              // Helper to find standard casing if possible
+              const getNiceCasing = (p: string) => {
+                // Try to match against Key Vault All (Standard) or just keep as is
+                // Note: We need a reference list of ALL valid permissions including Purge. 
+                // Since we don't have the full LEGACY list imported here (only KEY_VAULT_ALL_PERMISSIONS),
+                // we will just capitalize the first letter as a heuristic if we can't find a match.
+                // Actually, we can just TitleCase it.
+                if (p.toLowerCase() === 'all') return 'All';
+                return p.charAt(0).toUpperCase() + p.slice(1);
+              };
+
+              if (perms.some(p => p.toLowerCase() === 'all')) {
+                const standardPerms = KEY_VAULT_ALL_PERMISSIONS[normalizedCategory] || [];
+
+                // Get other permissions (like 'purge'), and try to normalize their casing
+                const otherPerms = perms
+                  .filter(p => p.toLowerCase() !== 'all')
+                  .map(p => getNiceCasing(p));
+
+                expandedPermissions[category] = Array.from(new Set([...standardPerms, ...otherPerms]));
+              } else {
+                expandedPermissions[category] = perms;
+              }
+            });
+
             return {
               tenantId: ap.tenantId,
               objectId: ap.objectId,
               applicationId: ap.applicationId,
               displayName: ap.displayName || undefined,
               type: type,
-              permissions: ap.permissions || {}
+              permissions: expandedPermissions
             };
           })
         } as KeyVault;
