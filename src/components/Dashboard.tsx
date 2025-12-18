@@ -124,15 +124,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
     setShowExportMenu(false);
   };
 
+  // State for including custom roles analysis
+  const [includeCustomRoles, setIncludeCustomRoles] = useState(true);
+
   const handleAnalyze = async () => {
     if (!selectedVault) return;
     setStatus(MigrationStatus.ANALYZING);
 
     try {
+      // Filter roles based on toggle
+      const rolesToAnalyze = includeCustomRoles
+        ? availableRoles
+        : availableRoles.filter(r => r.properties.type === 'BuiltInRole');
+
       // Use local greedy analysis
       // Small timeout to allow UI to render the spinner
       setTimeout(() => {
-        const analysis = analyzePolicies(selectedVault.accessPolicies, availableRoles);
+        const analysis = analyzePolicies(selectedVault.accessPolicies, rolesToAnalyze);
 
         // Enhance with existing coverage check
         const enhancedAnalysis = analysis.map(a => {
@@ -144,7 +152,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
         const defaults: Record<string, number> = {};
 
         enhancedAnalysis.forEach(a => {
-          // Find the strategy with the best confidence score
           let bestIndex = 0;
           let bestConfidence = a.recommendations[0]?.confidence || 0;
 
@@ -152,11 +159,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
             const currentConfidence = a.recommendations[i].confidence;
 
             if (currentConfidence > bestConfidence) {
-              // Better confidence, use this one
               bestIndex = i;
               bestConfidence = currentConfidence;
             } else if (currentConfidence === bestConfidence) {
-              // Tie - use priority: Minimize Excess (1) > Balanced (2) > Max Coverage (0)
               const currentStrategy = a.recommendations[i].strategy;
               const bestStrategy = a.recommendations[bestIndex].strategy;
 
@@ -294,28 +299,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
                 </div>
               )}
               {selectedVault && (
-                <button
-                  onClick={handleAnalyze}
-                  disabled={status === MigrationStatus.ANALYZING || status === MigrationStatus.COMPLETE}
-                  className={`px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 ${status === MigrationStatus.COMPLETE
-                    ? 'bg-green-600 text-white cursor-default'
-                    : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm'
-                    }`}
-                >
-                  {status === MigrationStatus.ANALYZING ? (
-                    <>
-                      <LoaderIcon className="animate-spin w-4 h-4" /> Processing...
-                    </>
-                  ) : status === MigrationStatus.COMPLETE ? (
-                    <>
-                      <CheckCircleIcon className="w-4 h-4" /> Analysis Complete
-                    </>
-                  ) : (
-                    <>
-                      Run Analysis <ArrowRightIcon className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-4">
+
+                  {/* Custom Role Toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={includeCustomRoles}
+                        onChange={(e) => setIncludeCustomRoles(e.target.checked)}
+                        disabled={status === MigrationStatus.ANALYZING || status === MigrationStatus.COMPLETE}
+                      />
+                      <div className="w-9 h-5 bg-neutral-300 dark:bg-neutral-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                    </div>
+                    <span className={`text-sm font-medium ${status === MigrationStatus.ANALYZING || status === MigrationStatus.COMPLETE ? 'text-neutral-400' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                      Include Custom Roles
+                    </span>
+                  </label>
+
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={status === MigrationStatus.ANALYZING || status === MigrationStatus.COMPLETE}
+                    className={`px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 ${status === MigrationStatus.COMPLETE
+                      ? 'bg-green-600 text-white cursor-default'
+                      : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm'
+                      }`}
+                  >
+                    {status === MigrationStatus.ANALYZING ? (
+                      <>
+                        <LoaderIcon className="animate-spin w-4 h-4" /> Processing...
+                      </>
+                    ) : status === MigrationStatus.COMPLETE ? (
+                      <>
+                        <CheckCircleIcon className="w-4 h-4" /> Analysis Complete
+                      </>
+                    ) : (
+                      <>
+                        Run Analysis <ArrowRightIcon className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -338,16 +363,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
                   <p className="text-neutral-700 dark:text-neutral-400 mb-4">This vault has <strong className="text-neutral-900 dark:text-white">{selectedVault.accessPolicies.length}</strong> legacy access policies defined.</p>
                   <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-8">We have loaded <strong className="text-neutral-900 dark:text-neutral-200">{availableRoles.length}</strong> RBAC roles (Built-in & Custom) from your subscription to find the best match.</p>
 
-                  <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="grid grid-cols-3 gap-4 mb-8">
                     <div className="p-4 bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-700 rounded">
                       <div className="text-2xl font-light text-brand-600">{selectedVault.accessPolicies.length}</div>
                       <div className="text-xs font-semibold uppercase text-neutral-700 dark:text-neutral-400 tracking-wide mt-1">Total Policies</div>
                     </div>
                     <div className="p-4 bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-700 rounded">
                       <div className="text-2xl font-light text-neutral-800 dark:text-neutral-200">
-                        {availableRoles.length}
+                        {availableRoles.filter(r => r.properties.type === 'BuiltInRole').length}
                       </div>
-                      <div className="text-xs font-semibold uppercase text-neutral-700 dark:text-neutral-400 tracking-wide mt-1">Available Roles</div>
+                      <div className="text-xs font-semibold uppercase text-neutral-700 dark:text-neutral-400 tracking-wide mt-1">Built-in Roles</div>
+                    </div>
+                    <div className="p-4 bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-700 rounded">
+                      <div className="text-2xl font-light text-neutral-800 dark:text-neutral-200">
+                        {availableRoles.filter(r => r.properties.type === 'CustomRole').length}
+                      </div>
+                      <div className="text-xs font-semibold uppercase text-neutral-700 dark:text-neutral-400 tracking-wide mt-1">Custom Roles</div>
                     </div>
                   </div>
                 </div>
@@ -375,9 +406,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
               />
             )}
           </div>
-        </div>
-      </div>
-    </div>
+        </div >
+      </div >
+    </div >
   );
 };
 
