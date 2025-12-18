@@ -1,6 +1,20 @@
-
 import { Subscription, KeyVault, AccessPolicyEntry, RoleDefinition, IdentityType, RoleAssignment } from '../types';
-import { KEY_VAULT_ALL_PERMISSIONS } from '../utils/permissionDefinitions';
+import {
+  KeyVaultResponse,
+  SubscriptionResponse,
+  TenantResponse,
+  RoleDefinitionResponse,
+  RoleAssignmentResponse,
+  RoleAssignmentListResponse,
+  GraphResponse,
+  parseKeyVaultResponse,
+  parseSubscriptions,
+  parseTenants,
+  parseRoleDefinitions,
+  parsePrincipalTypes,
+  parseRoleAssignments,
+  parseGraphResponse
+} from './azureResponseParser';
 
 const ARM_ENDPOINT = 'https://management.azure.com';
 const GRAPH_ENDPOINT = 'https://graph.microsoft.com/v1.0';
@@ -66,48 +80,20 @@ export const validateToken = async (token: string): Promise<void> => {
   }
 };
 
-interface SubscriptionResponse {
-  value: Array<{
-    id: string;
-    displayName: string;
-    subscriptionId: string;
-  }>;
-}
-
 export const getSubscriptions = async (token: string): Promise<Subscription[]> => {
   const data = await azureFetch<SubscriptionResponse>(`${ARM_ENDPOINT}/subscriptions?api-version=${AZURE_API.SUBSCRIPTIONS}`, token);
-  return data.value.map((sub) => ({
-    id: sub.id,
-    displayName: sub.displayName,
-    subscriptionId: sub.subscriptionId
-  }));
+  return parseSubscriptions(data);
 };
-
-interface TenantResponse {
-  value: Array<{
-    id: string;
-    tenantId: string;
-    displayName: string;
-  }>;
-}
 
 export const getTenants = async (token: string): Promise<Record<string, string>> => {
   try {
     const data = await azureFetch<TenantResponse>(`${ARM_ENDPOINT}/tenants?api-version=2022-12-01`, token);
-    const map: Record<string, string> = {};
-    data.value.forEach(t => {
-      map[t.tenantId] = t.displayName;
-    });
-    return map;
+    return parseTenants(data);
   } catch (e) {
     console.error("Failed to fetch tenants", e);
     return {};
   }
 };
-
-interface RoleDefinitionResponse {
-  value: RoleDefinition[];
-}
 
 export const getRoleDefinitions = async (token: string, subscriptionId: string): Promise<RoleDefinition[]> => {
   // Fetch both BuiltIn and Custom roles
@@ -115,73 +101,37 @@ export const getRoleDefinitions = async (token: string, subscriptionId: string):
 
   try {
     const data = await azureFetch<RoleDefinitionResponse>(url, token);
-    return data.value;
+    return parseRoleDefinitions(data);
   } catch (e) {
     console.error("Failed to fetch role definitions", e);
     return [];
   }
 };
 
-interface RoleAssignmentResponse {
-  value: Array<{
-    properties: {
-      principalId: string;
-      principalType: string;
-    }
-  }>;
-}
-
 // Fetch role assignments to build a cache of Principal Types (User vs Group vs SP)
 // This uses ARM, so it shares the same token and is reliable.
 const getPrincipalTypesCache = async (token: string, subscriptionId: string): Promise<Record<string, IdentityType>> => {
   const url = `${ARM_ENDPOINT}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${AZURE_API.AUTHORIZATION}`;
-  const cache: Record<string, IdentityType> = {};
 
   try {
     const data = await azureFetch<RoleAssignmentResponse>(url, token);
-    if (data && data.value) {
-      data.value.forEach((assignment) => {
-        const pid = assignment.properties.principalId;
-        const pType = assignment.properties.principalType; // 'User', 'Group', 'ServicePrincipal'
-        if (pid && pType) {
-          cache[pid] = pType as IdentityType;
-        }
-      });
-    }
+    return parsePrincipalTypes(data);
   } catch (e) {
     console.warn("Failed to fetch role assignments for type resolution.", e);
+    return {};
   }
-
-  return cache;
 };
-
-interface RoleAssignmentListResponse {
-  value: RoleAssignment[];
-}
 
 export const getRoleAssignments = async (token: string, subscriptionId: string): Promise<RoleAssignment[]> => {
   const url = `${ARM_ENDPOINT}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${AZURE_API.AUTHORIZATION}`;
   try {
     const data = await azureFetch<RoleAssignmentListResponse>(url, token);
-    return data.value;
+    return parseRoleAssignments(data);
   } catch (e) {
     console.error("Failed to fetch role assignments", e);
     return [];
   }
 };
-
-interface GraphObject {
-  id: string;
-  displayName?: string;
-  appDisplayName?: string;
-  userPrincipalName?: string;
-  mailNickname?: string;
-  '@odata.type': string;
-}
-
-interface GraphResponse {
-  value: GraphObject[];
-}
 
 /**
  * Attempts to resolve Object IDs to Display Names AND Types using Microsoft Graph.
@@ -192,7 +142,7 @@ export const resolveBatchIdentities = async (objectIds: string[], token: string)
   if (objectIds.length === 0) return {};
 
   const uniqueIds = [...new Set(objectIds)];
-  const map: Record<string, { name: string, type: IdentityType }> = {};
+  const results: Record<string, { name: string, type: IdentityType }> = {};
   const CHUNK_SIZE = 20; // Safe batch size
 
   // Process in chunks
@@ -214,23 +164,8 @@ export const resolveBatchIdentities = async (objectIds: string[], token: string)
 
       if (response.ok) {
         const data = await response.json() as GraphResponse;
-        data.value.forEach((item) => {
-          // 1. Determine Name
-          const name = item.displayName || item.appDisplayName || item.userPrincipalName || item.mailNickname;
-
-          // 2. Determine Type from OData Metadata
-          let type: IdentityType = 'Unknown';
-          const odataType = item['@odata.type']; // e.g., "#microsoft.graph.user"
-
-          if (odataType === '#microsoft.graph.user') type = 'User';
-          else if (odataType === '#microsoft.graph.group') type = 'Group';
-          else if (odataType === '#microsoft.graph.servicePrincipal') type = 'ServicePrincipal';
-          else if (odataType === '#microsoft.graph.application') type = 'Application';
-
-          if (name) {
-            map[item.id] = { name, type };
-          }
-        });
+        const parsedChunk = parseGraphResponse(data);
+        Object.assign(results, parsedChunk);
       } else {
         console.warn(`Graph API resolution failed (Status: ${response.status}). Ensure you provided a valid Graph Token.`);
       }
@@ -240,33 +175,11 @@ export const resolveBatchIdentities = async (objectIds: string[], token: string)
     }
   }
 
-  return map;
+  return results;
 };
 
-interface KeyVaultResource {
-  id: string;
-}
-
 interface KeyVaultListResponse {
-  value: KeyVaultResource[];
-}
-
-interface KeyVaultProperties {
-  sku?: { name: string };
-  accessPolicies?: Array<{
-    tenantId: string;
-    objectId: string;
-    applicationId?: string;
-    displayName?: string;
-    permissions?: Record<string, string[]>;
-  }>;
-}
-
-interface KeyVaultResponse {
-  id: string;
-  name: string;
-  location: string;
-  properties: KeyVaultProperties;
+  value: Array<{ id: string }>;
 }
 
 export const getKeyVaults = async (token: string, subscriptionId: string): Promise<KeyVault[]> => {
@@ -296,69 +209,7 @@ export const getKeyVaults = async (token: string, subscriptionId: string): Promi
         const vaultUrl = `${ARM_ENDPOINT}${resource.id}?api-version=${AZURE_API.KEYVAULT}`;
         const vaultData = await azureFetch<KeyVaultResponse>(vaultUrl, token);
 
-        return {
-          id: vaultData.id,
-          name: vaultData.name,
-          location: vaultData.location,
-          sku: vaultData.properties.sku?.name || 'Unknown',
-          accessPolicies: (vaultData.properties.accessPolicies || []).map((ap) => {
-            let type: IdentityType = 'Unknown';
-
-            // 1. Infer from Access Policy data (if applicationId is present, it's an app/SP)
-            if (ap.applicationId) {
-              type = 'Application';
-            }
-            // 2. Infer from Role Assignment Cache (high hit rate for users/groups)
-            else if (principalTypeCache[ap.objectId]) {
-              type = principalTypeCache[ap.objectId];
-            }
-
-            // Note: ap.displayName might not exist in standard ARM response, 
-            // but we check for it just in case the API version or proxy adds it.
-
-            const rawPermissions = ap.permissions || {};
-            const expandedPermissions: Record<string, string[]> = {};
-
-            // Expand "all" to full list (minus Purge) here at the service level
-            Object.entries(rawPermissions).forEach(([category, perms]) => {
-              const normalizedCategory = category.toLowerCase();
-              if (!perms) return;
-
-              // Helper to find standard casing if possible
-              const getNiceCasing = (p: string) => {
-                // Try to match against Key Vault All (Standard) or just keep as is
-                // Note: We need a reference list of ALL valid permissions including Purge. 
-                // Since we don't have the full LEGACY list imported here (only KEY_VAULT_ALL_PERMISSIONS),
-                // we will just capitalize the first letter as a heuristic if we can't find a match.
-                // Actually, we can just TitleCase it.
-                if (p.toLowerCase() === 'all') return 'All';
-                return p.charAt(0).toUpperCase() + p.slice(1);
-              };
-
-              if (perms.some(p => p.toLowerCase() === 'all')) {
-                const standardPerms = KEY_VAULT_ALL_PERMISSIONS[normalizedCategory] || [];
-
-                // Get other permissions (like 'purge'), and try to normalize their casing
-                const otherPerms = perms
-                  .filter(p => p.toLowerCase() !== 'all')
-                  .map(p => getNiceCasing(p));
-
-                expandedPermissions[category] = Array.from(new Set([...standardPerms, ...otherPerms]));
-              } else {
-                expandedPermissions[category] = perms;
-              }
-            });
-
-            return {
-              tenantId: ap.tenantId,
-              objectId: ap.objectId,
-              applicationId: ap.applicationId,
-              displayName: ap.displayName || undefined,
-              type: type,
-              permissions: expandedPermissions
-            };
-          })
-        } as KeyVault;
+        return parseKeyVaultResponse(vaultData, principalTypeCache);
       } catch (e) {
         console.error(`Failed to fetch details for vault ${resource.id}`, e);
         return null;

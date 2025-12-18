@@ -327,11 +327,11 @@ export function runWeightedAnalysis(
 
 
   let effectiveLimit = MAX_COMBINATION_SIZE;
-  if (usefulRoles.length > 20) {
-    // If we have many useful roles, cap recursion to 3 to prevent freeze
-    effectiveLimit = 3;
-    console.warn(`Too many useful roles (${usefulRoles.length}). Capping combination depth to 3.`);
-  }
+  // if (usefulRoles.length > 20) {
+  //   // If we have many useful roles, cap recursion to 3 to prevent freeze
+  //   effectiveLimit = 3;
+  //   console.warn(`Too many useful roles (${usefulRoles.length}). Capping combination depth to 3.`);
+  // }
 
 
   const generateCombinations = (

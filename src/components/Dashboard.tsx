@@ -11,9 +11,10 @@ interface DashboardProps {
   armToken: string;
   graphToken?: string;
   theme: 'light' | 'dark';
+  offlineData?: { vaults: KeyVault[], roles: RoleDefinition[] } | null;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, theme }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, theme, offlineData }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
 
@@ -33,6 +34,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
 
   useEffect(() => {
     const loadSubs = async () => {
+      if (offlineData) {
+        setSubscriptions([{
+          id: '/subscriptions/offline-sub',
+          displayName: 'Offline Subscription',
+          subscriptionId: 'offline-sub'
+        }]);
+        setStatus(MigrationStatus.IDLE);
+        return;
+      }
+
       try {
         const subs = await getSubscriptions(armToken);
         setSubscriptions(subs);
@@ -43,45 +54,52 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
       }
     };
     loadSubs();
-  }, [armToken]);
+  }, [armToken, offlineData]);
 
   useEffect(() => {
     if (selectedSub) {
       setStatus(MigrationStatus.LOADING);
 
-      // Fetch Vaults, Roles, AND Assignments in parallel
-      Promise.all([
-        getKeyVaults(armToken, selectedSub.subscriptionId),
-        getRoleDefinitions(armToken, selectedSub.subscriptionId),
-        getRoleAssignments(armToken, selectedSub.subscriptionId)
-      ])
-        .then(([v, r, a]) => {
-          setVaults(v);
-          setAvailableRoles(r);
-          setRoleAssignments(a);
-          setStatus(MigrationStatus.IDLE);
-        })
-        .catch(e => {
-          console.error(e);
-          setStatus(MigrationStatus.ERROR);
-        });
+      if (offlineData) {
+        setVaults(offlineData.vaults);
+        setAvailableRoles(offlineData.roles);
+        setRoleAssignments([]); // No assignments in offline mode for now
+        setStatus(MigrationStatus.IDLE);
+      } else {
+        // Fetch Vaults, Roles, AND Assignments in parallel
+        Promise.all([
+          getKeyVaults(armToken, selectedSub.subscriptionId),
+          getRoleDefinitions(armToken, selectedSub.subscriptionId),
+          getRoleAssignments(armToken, selectedSub.subscriptionId)
+        ])
+          .then(([v, r, a]) => {
+            setVaults(v);
+            setAvailableRoles(r);
+            setRoleAssignments(a);
+            setStatus(MigrationStatus.IDLE);
+          })
+          .catch(e => {
+            console.error(e);
+            setStatus(MigrationStatus.ERROR);
+          });
+      }
 
       setSelectedVault(null);
       setResults([]);
       setSelectedRoles({});
       setResolvedNames({});
     }
-  }, [selectedSub, armToken]);
+  }, [selectedSub, armToken, offlineData]);
 
   // Trigger Identity Resolution when results are generated
   useEffect(() => {
-    if (results.length > 0) {
+    if (results.length > 0 && !offlineData) {
       const objectIds = results.map(r => r.originalPolicy.objectId);
       resolveBatchIdentities(objectIds, graphToken || armToken).then(map => {
         setResolvedNames(prev => ({ ...prev, ...map }));
       });
     }
-  }, [results, graphToken, armToken]);
+  }, [results, graphToken, armToken, offlineData]);
 
   const handleExport = (format: 'csv' | 'json' | 'powershell') => {
     if (!selectedVault || !selectedSub) return;

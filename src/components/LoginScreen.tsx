@@ -1,15 +1,16 @@
 
 import React, { useState } from 'react';
 import { validateToken } from '../services/azureService';
-import { SunIcon, MoonIcon, CopyIcon, CheckCircleIcon } from './Icons';
+import { SunIcon, MoonIcon, CopyIcon, CheckCircleIcon, WifiOffIcon } from './Icons';
 
 interface LoginScreenProps {
   onLogin: (armToken: string, graphToken: string) => void;
+  onOffline: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, theme, onToggleTheme }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onOffline, theme, onToggleTheme }) => {
   const [armToken, setArmToken] = useState('');
   const [graphToken, setGraphToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,8 +53,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, theme, onTogg
 
       <div className="relative max-w-[500px] w-full bg-white dark:bg-neutral-800 shadow-fluent p-8 rounded-lg border border-neutral-200 dark:border-neutral-700 my-8 max-h-[90vh] overflow-y-auto">
         <div className="flex flex-col items-start mb-6">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center justify-between gap-4 mb-2 w-full">
             <span className="font-semibold text-lg text-neutral-800 dark:text-neutral-200">Migration Assistant</span>
+            <button
+              onClick={onOffline}
+              className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 shadow-sm"
+              aria-label="Use Offline Mode"
+            >
+              <WifiOffIcon className="w-3.5 h-3.5" />
+              Offline Mode
+            </button>
           </div>
           <h2 className="text-2xl font-semibold text-neutral-900 dark:text-white mt-2">
             Connect to Azure
@@ -129,11 +138,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, theme, onTogg
 
           {error && <p className="text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900">{error}</p>}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex flex-col items-end gap-3 pt-2">
             <button
               onClick={handleLogin}
               disabled={loading || !armToken}
-              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               {loading ? 'Verifying...' : 'Connect'}
             </button>
