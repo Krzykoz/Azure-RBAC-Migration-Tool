@@ -5,6 +5,109 @@ import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
+// Custom Shape to handle Centering + Animation
+const CenteredBar = (props: any) => {
+    const { x, y, width, height, payload, type, barWidth, gap } = props;
+
+    // Filter active metrics
+    const metrics = [];
+    if (payload.coveragePct > 0) metrics.push('coverage');
+    if (payload.excessPct > 0) metrics.push('excess');
+    if (payload.missingPct > 0) metrics.push('missing');
+
+    const myIndex = metrics.indexOf(type);
+    if (myIndex === -1) return null; // Don't render if 0% or invalid
+
+    // Calculate Geometry
+    const totalGroupWidth = (metrics.length * barWidth) + ((metrics.length - 1) * gap);
+
+    // Determine Center of the Slot based on the "Standard Layout" assumption
+    // Recharts places bars at: x = SlotStartX + (Index * (Width + Gap))
+    // Standard Order: Coverage (0), Excess (1), Missing (2)
+    // We reverse engineer the Slot Center from the provided 'x' which corresponds to the current 'type's standard position.
+
+    let defaultIndex = 0;
+    if (type === 'excess') defaultIndex = 1;
+    if (type === 'missing') defaultIndex = 2;
+
+    const standardOffset = defaultIndex * (barWidth + gap);
+    // x is where Recharts put THIS bar. So SlotStart = x - standardOffset
+    const slotStartX = x - standardOffset;
+
+    // We want the group of *active* bars to be centered in the "Band"
+    // Recharts BandWidth isn't directly passed easily, but we can assume the band is wide enough 
+    // or calculate from standard 3-bar width.
+    // Standard 3-bar width = 3*20 + 2*2 = 64.
+    // Let's assume the Recharts allocated slot is sized for 3 bars.
+    const fullSlotWidth = (3 * barWidth) + (2 * gap);
+
+    const slotCenterX = slotStartX + fullSlotWidth / 2;
+
+    // New Start X for the centered group
+    const groupStartX = slotCenterX - totalGroupWidth / 2;
+    const myNewX = groupStartX + (myIndex * (barWidth + gap));
+
+    // Colors
+    let fill = '';
+    let textFill = '';
+    let textStroke = '';
+
+    if (type === 'coverage') {
+        fill = '#107c10';
+        textFill = '#0b5a0b';
+        textStroke = '#107c10';
+    } else if (type === 'excess') {
+        fill = '#ffaa44';
+        textFill = '#cc7a00';
+        textStroke = '#ffaa44';
+    } else {
+        fill = '#d13438';
+        textFill = '#a31a1e';
+        textStroke = '#d13438';
+    }
+
+    // Label Logic
+    const isTallEnough = height > 35;
+    const value = payload[`${type}Pct`];
+    const text = value > 0 ? `${value}%` : '';
+
+    let labelX, labelY, anchor, baseline;
+    if (isTallEnough) {
+        labelX = myNewX + barWidth / 2;
+        labelY = y + height / 2;
+        anchor = "middle";
+        baseline = "middle";
+    } else {
+        labelX = myNewX + barWidth / 2;
+        labelY = y + height - 5;
+        anchor = "start";
+        baseline = "central";
+    }
+
+    return (
+        <g>
+            <path d={`M${myNewX},${y} a2,2 0 0 1 2,-2 h${barWidth - 4} a2,2 0 0 1 2,2 v${height} h-${barWidth} z`} fill={fill} />
+            {text && (
+                <text
+                    x={labelX}
+                    y={labelY}
+                    fill={textFill}
+                    stroke={textStroke}
+                    strokeWidth={3}
+                    style={{ paintOrder: 'stroke fill' }}
+                    fontSize={12}
+                    fontWeight={900}
+                    textAnchor={anchor as any}
+                    dominantBaseline={baseline as any}
+                    transform={`rotate(-90, ${labelX}, ${labelY})`}
+                >
+                    {text}
+                </text>
+            )}
+        </g>
+    );
+};
+
 interface AnalysisResultsProps {
     results: MigrationAnalysis[];
     selectedRoles: Record<string, number>;
@@ -83,6 +186,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                 coveragePct,
                 excessPct,
                 missingPct,
+                fullScale: 100,
                 // Keep raw counts for tooltip usage if needed, or just show %
                 rawMissing: missing,
                 rawExcess: excess,
@@ -378,87 +482,24 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                 content={<CustomTooltip />}
                                 cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
                             />
-                            <Bar dataKey="coveragePct" fill="#107c10" radius={[2, 2, 0, 0]} barSize={20}>
-                                <LabelList
-                                    dataKey="coveragePct"
-                                    content={(props: any) => {
-                                        const { x, y, width, height, value } = props;
-                                        if (!value || value <= 0) return null;
-                                        const color = "#0b5a0b";
-                                        const strokeColor = "#107c10";
-                                        const text = `${value}%`;
-                                        const isTallEnough = height > 35;
-
-                                        if (isTallEnough) {
-                                            const centerX = x + width / 2;
-                                            const centerY = y + height / 2;
-                                            return (
-                                                <text x={centerX} y={centerY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90, ${centerX}, ${centerY})`}>{text}</text>
-                                            );
-                                        } else {
-                                            const centerX = x + width / 2;
-                                            const bottomY = y + height - 5;
-                                            return (
-                                                <text x={centerX} y={bottomY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="start" dominantBaseline="central" transform={`rotate(-90, ${centerX}, ${bottomY})`}>{text}</text>
-                                            );
-                                        }
-                                    }}
-                                />
-                            </Bar>
-                            <Bar dataKey="excessPct" fill="#ffaa44" radius={[2, 2, 0, 0]} barSize={20}>
-                                <LabelList
-                                    dataKey="excessPct"
-                                    content={(props: any) => {
-                                        const { x, y, width, height, value } = props;
-                                        if (!value || value <= 0) return null;
-                                        const color = "#cc7a00";
-                                        const strokeColor = "#ffaa44";
-                                        const text = `${value}%`;
-                                        const isTallEnough = height > 35;
-
-                                        if (isTallEnough) {
-                                            const centerX = x + width / 2;
-                                            const centerY = y + height / 2;
-                                            return (
-                                                <text x={centerX} y={centerY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90, ${centerX}, ${centerY})`}>{text}</text>
-                                            );
-                                        } else {
-                                            const centerX = x + width / 2;
-                                            const bottomY = y + height - 5;
-                                            return (
-                                                <text x={centerX} y={bottomY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="start" dominantBaseline="central" transform={`rotate(-90, ${centerX}, ${bottomY})`}>{text}</text>
-                                            );
-                                        }
-                                    }}
-                                />
-                            </Bar>
-                            <Bar dataKey="missingPct" fill="#d13438" radius={[2, 2, 0, 0]} barSize={20}>
-                                <LabelList
-                                    dataKey="missingPct"
-                                    content={(props: any) => {
-                                        const { x, y, width, height, value } = props;
-                                        if (!value || value <= 0) return null;
-                                        const color = "#a31a1e";
-                                        const strokeColor = "#d13438";
-                                        const text = `${value}%`;
-                                        const isTallEnough = height > 35;
-
-                                        if (isTallEnough) {
-                                            const centerX = x + width / 2;
-                                            const centerY = y + height / 2;
-                                            return (
-                                                <text x={centerX} y={centerY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90, ${centerX}, ${centerY})`}>{text}</text>
-                                            );
-                                        } else {
-                                            const centerX = x + width / 2;
-                                            const bottomY = y + height - 5;
-                                            return (
-                                                <text x={centerX} y={bottomY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="start" dominantBaseline="central" transform={`rotate(-90, ${centerX}, ${bottomY})`}>{text}</text>
-                                            );
-                                        }
-                                    }}
-                                />
-                            </Bar>
+                            <Bar
+                                dataKey="coveragePct"
+                                shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={20} gap={2} />}
+                                barSize={20}
+                                isAnimationActive={true}
+                            />
+                            <Bar
+                                dataKey="excessPct"
+                                shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={20} gap={2} />}
+                                barSize={20}
+                                isAnimationActive={true}
+                            />
+                            <Bar
+                                dataKey="missingPct"
+                                shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={20} gap={2} />}
+                                barSize={20}
+                                isAnimationActive={true}
+                            />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

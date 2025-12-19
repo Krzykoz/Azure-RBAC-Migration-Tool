@@ -44,22 +44,50 @@ export const PermissionVisualizer: React.FC<PermissionVisualizerProps> = ({ brea
     const renderBadgeList = (perms: string[], type: 'missing' | 'covered' | 'excess', keyPrefix: string, isExpanded: boolean) => {
         if (perms.length === 0) return null;
 
-        const itemsToShow = isExpanded ? perms : perms.slice(0, VISIBLE_LIMIT);
-        const hasMore = perms.length > VISIBLE_LIMIT;
+        // Sort relative to potential privileged items if type is excess
+        let displayPerms = [...perms];
+        if (type === 'excess') {
+            displayPerms.sort((a, b) => {
+                const isAPriv = a.toLowerCase().includes('purge') || a.toLowerCase().includes('release');
+                const isBPriv = b.toLowerCase().includes('purge') || b.toLowerCase().includes('release');
+                if (isAPriv && !isBPriv) return -1;
+                if (!isAPriv && isBPriv) return 1;
+                return a.localeCompare(b);
+            });
+        }
+
+        const itemsToShow = isExpanded ? displayPerms : displayPerms.slice(0, VISIBLE_LIMIT);
+        const hasMore = displayPerms.length > VISIBLE_LIMIT;
 
         return (
             <>
                 {itemsToShow.map((p, i) => {
                     let colorClass = '';
-                    if (type === 'missing') colorClass = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-900';
-                    if (type === 'covered') colorClass = 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-900';
-                    if (type === 'excess') colorClass = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-900';
+                    let isPrivileged = false;
+
+                    if (type === 'missing') {
+                        colorClass = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-900';
+                    } else if (type === 'covered') {
+                        colorClass = 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-900';
+                    } else if (type === 'excess') {
+                        const lower = p.toLowerCase();
+                        if (lower.includes('purge') || lower.includes('release')) {
+                            isPrivileged = true;
+                            // Darker, more warning-like yellow/amber for privileged ops
+                            colorClass = 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-200 dark:border-amber-600';
+                        } else {
+                            colorClass = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-900';
+                        }
+                    }
+
+                    const tooltipText = isPrivileged ? "This is a privileged operation" : p;
 
                     return (
-                        <span key={`${keyPrefix}-${i}`} className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold border truncate max-w-[200px] ${colorClass}`} title={p}>
+                        <span key={`${keyPrefix}-${i}`} className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold border truncate max-w-[200px] ${colorClass}`} title={tooltipText}>
                             {type === 'missing' && <AlertTriangleIcon className="w-3 h-3 mr-1 flex-shrink-0" />}
                             {type === 'excess' && '+ '}
                             {formatPerm(p)}
+                            {type === 'excess' && isPrivileged && <AlertTriangleIcon className="w-3 h-3 ml-1 flex-shrink-0" />}
                         </span>
                     );
                 })}
