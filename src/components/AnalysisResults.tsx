@@ -3,7 +3,7 @@ import { MigrationAnalysis, IdentityType } from '../types';
 import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon } from './Icons';
 import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
 interface AnalysisResultsProps {
     results: MigrationAnalysis[];
@@ -46,21 +46,51 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         return groups;
     }, [results, resolvedNames]);
 
-    const activeData = results.map(r => {
-        const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
-        const rec = r.recommendations[selectedIdx];
-        const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-        const displayName = resolvedInfo?.name || r.originalPolicy.displayName;
+    const activeData = useMemo(() => {
+        const sortedResults = [
+            ...groupedResults['Application'],
+            ...groupedResults['ServicePrincipal'],
+            ...groupedResults['Group'],
+            ...groupedResults['User'],
+            ...groupedResults['Unknown']
+        ];
 
-        return {
-            name: displayName || r.originalPolicy.objectId.substring(0, 8),
-            confidence: rec?.confidence || 0,
-            missing: rec?.missingPermissions.length || 0,
-            excess: rec?.excessPermissions.length || 0,
-            role: rec?.roleName || 'None',
-            strategy: rec?.strategy
-        };
-    });
+        return sortedResults.map(r => {
+            const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
+            const rec = r.recommendations[selectedIdx];
+            const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
+            const displayName = resolvedInfo?.name || r.originalPolicy.displayName;
+
+            const covered = rec?.coveredPermissions?.length || 0;
+            const missing = rec?.missingPermissions?.length || 0;
+            const excess = rec?.excessPermissions?.length || 0;
+
+            // Calculate Percentages
+            // Coverage is already a % (confidence)
+            const coveragePct = rec?.confidence || 0;
+
+            // Excess % = Excess / Total Role Permissions (Covered + Excess)
+            const totalRolePerms = covered + excess;
+            const excessPct = totalRolePerms > 0 ? Math.round((excess / totalRolePerms) * 100) : 0;
+
+            // Missing % = Missing / Total Required Permissions (Covered + Missing)
+            const totalRequired = covered + missing;
+            const missingPct = totalRequired > 0 ? Math.round((missing / totalRequired) * 100) : 0;
+
+
+            return {
+                name: displayName || r.originalPolicy.objectId.substring(0, 8),
+                coveragePct,
+                excessPct,
+                missingPct,
+                // Keep raw counts for tooltip usage if needed, or just show %
+                rawMissing: missing,
+                rawExcess: excess,
+                role: rec?.roleName || 'None',
+                strategy: rec?.strategy
+            };
+        });
+    }, [groupedResults, selectedRoles, resolvedNames]);
 
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
@@ -73,19 +103,19 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                             Strategy: <span className="font-semibold text-brand-600 dark:text-brand-400">{data.strategy}</span>
                         </p>
                         <p className="text-neutral-700 dark:text-neutral-300">
-                            Confidence: <span className={`font-semibold ${data.confidence > 80 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{data.confidence}%</span>
+                            Coverage: <span className={`font-semibold ${data.coveragePct > 80 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{data.coveragePct}%</span>
                         </p>
                         <p className="text-neutral-700 dark:text-neutral-300">
                             Role: <span className="font-mono text-[10px]">{data.role}</span>
                         </p>
-                        {data.missing > 0 && (
+                        {data.missingPct > 0 && (
                             <p className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                                <AlertTriangleIcon className="w-3 h-3" /> {data.missing} Missing
+                                <AlertTriangleIcon className="w-3 h-3" /> {data.missingPct}% Missing ({data.rawMissing})
                             </p>
                         )}
-                        {data.excess > 0 && (
+                        {data.excessPct > 0 && (
                             <p className="text-amber-600 dark:text-amber-400">
-                                + {data.excess} Excess
+                                + {data.excessPct}% Excess ({data.rawExcess})
                             </p>
                         )}
                     </div>
@@ -327,7 +357,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
             {/* Overview Charts */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="md:col-span-3 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700" style={{ height: '392px' }}>
-                    <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Confidence Distribution</h4>
+                    <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Coverage Distribution</h4>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={activeData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
@@ -348,10 +378,86 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                 content={<CustomTooltip />}
                                 cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
                             />
-                            <Bar dataKey="confidence" radius={[2, 2, 0, 0]} barSize={activeData.length > 15 ? 20 : 30}>
-                                {activeData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.confidence > 85 ? '#107c10' : entry.confidence > 60 ? '#ffaa44' : '#d13438'} />
-                                ))}
+                            <Bar dataKey="coveragePct" fill="#107c10" radius={[2, 2, 0, 0]} barSize={20}>
+                                <LabelList
+                                    dataKey="coveragePct"
+                                    content={(props: any) => {
+                                        const { x, y, width, height, value } = props;
+                                        if (!value || value <= 0) return null;
+                                        const color = "#0b5a0b";
+                                        const strokeColor = "#107c10";
+                                        const text = `${value}%`;
+                                        const isTallEnough = height > 35;
+
+                                        if (isTallEnough) {
+                                            const centerX = x + width / 2;
+                                            const centerY = y + height / 2;
+                                            return (
+                                                <text x={centerX} y={centerY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90, ${centerX}, ${centerY})`}>{text}</text>
+                                            );
+                                        } else {
+                                            const centerX = x + width / 2;
+                                            const bottomY = y + height - 5;
+                                            return (
+                                                <text x={centerX} y={bottomY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="start" dominantBaseline="central" transform={`rotate(-90, ${centerX}, ${bottomY})`}>{text}</text>
+                                            );
+                                        }
+                                    }}
+                                />
+                            </Bar>
+                            <Bar dataKey="excessPct" fill="#ffaa44" radius={[2, 2, 0, 0]} barSize={20}>
+                                <LabelList
+                                    dataKey="excessPct"
+                                    content={(props: any) => {
+                                        const { x, y, width, height, value } = props;
+                                        if (!value || value <= 0) return null;
+                                        const color = "#cc7a00";
+                                        const strokeColor = "#ffaa44";
+                                        const text = `${value}%`;
+                                        const isTallEnough = height > 35;
+
+                                        if (isTallEnough) {
+                                            const centerX = x + width / 2;
+                                            const centerY = y + height / 2;
+                                            return (
+                                                <text x={centerX} y={centerY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90, ${centerX}, ${centerY})`}>{text}</text>
+                                            );
+                                        } else {
+                                            const centerX = x + width / 2;
+                                            const bottomY = y + height - 5;
+                                            return (
+                                                <text x={centerX} y={bottomY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="start" dominantBaseline="central" transform={`rotate(-90, ${centerX}, ${bottomY})`}>{text}</text>
+                                            );
+                                        }
+                                    }}
+                                />
+                            </Bar>
+                            <Bar dataKey="missingPct" fill="#d13438" radius={[2, 2, 0, 0]} barSize={20}>
+                                <LabelList
+                                    dataKey="missingPct"
+                                    content={(props: any) => {
+                                        const { x, y, width, height, value } = props;
+                                        if (!value || value <= 0) return null;
+                                        const color = "#a31a1e";
+                                        const strokeColor = "#d13438";
+                                        const text = `${value}%`;
+                                        const isTallEnough = height > 35;
+
+                                        if (isTallEnough) {
+                                            const centerX = x + width / 2;
+                                            const centerY = y + height / 2;
+                                            return (
+                                                <text x={centerX} y={centerY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90, ${centerX}, ${centerY})`}>{text}</text>
+                                            );
+                                        } else {
+                                            const centerX = x + width / 2;
+                                            const bottomY = y + height - 5;
+                                            return (
+                                                <text x={centerX} y={bottomY} fill={color} stroke={strokeColor} strokeWidth={3} style={{ paintOrder: 'stroke fill' }} fontSize={12} fontWeight={900} textAnchor="start" dominantBaseline="central" transform={`rotate(-90, ${centerX}, ${bottomY})`}>{text}</text>
+                                            );
+                                        }
+                                    }}
+                                />
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
@@ -361,19 +467,19 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                 <div className="md:col-span-1 space-y-4">
                     <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                         <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                            {Math.round(activeData.reduce((acc, curr) => acc + curr.confidence, 0) / (activeData.length || 1))}%
+                            {Math.round(activeData.reduce((acc, curr) => acc + curr.coveragePct, 0) / (activeData.length || 1))}%
                         </div>
-                        <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Confidence Score</div>
+                        <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Coverage</div>
                     </div>
                     <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                         <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                            {activeData.reduce((acc, curr) => acc + curr.missing, 0)}
+                            {activeData.reduce((acc, curr) => acc + curr.rawMissing, 0)}
                         </div>
                         <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Missing Permissions</div>
                     </div>
                     <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                         <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                            {activeData.reduce((acc, curr) => acc + curr.excess, 0)}
+                            {activeData.reduce((acc, curr) => acc + curr.rawExcess, 0)}
                         </div>
                         <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Excess Permissions</div>
                     </div>
@@ -387,7 +493,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
                         <div className="col-span-3">Identity</div>
                         <div className="col-span-4">Recommended Role Combination</div>
-                        <div className="col-span-2 text-right">Confidence</div>
+                        <div className="col-span-2 text-right">Coverage</div>
                         <div className="col-span-3">Gap Analysis</div>
                     </div>
 

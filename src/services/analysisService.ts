@@ -134,8 +134,8 @@ const STRATEGIES: StrategyConfig[] = [
     description: 'Prioritizes covering all permissions, even if it means granting some excess access.',
     weights: {
       coverage: 10.0,   // Huge reward for coverage
-      excess: 0.05,     // Very low penalty for excess (tolerant of "dirty" roles)
-      roleCount: 2.0    // Moderate preference for fewer roles
+      excess: 0.15,     // Low penalty for excess (tolerant of "dirty" roles, but prefers cleaner ones)
+      roleCount: 0.1    // Lower penalty for adding roles (encourages combining granular roles)
     },
     threshold: -100 // Accept almost anything that adds value
   },
@@ -145,7 +145,7 @@ const STRATEGIES: StrategyConfig[] = [
     weights: {
       coverage: 2.0,    // Moderate reward
       excess: 5.0,      // Huge penalty for excess (rejects "dirty" roles)
-      roleCount: 1.0
+      roleCount: 0.1
     },
     threshold: 0.1 // Only accept roles that have a positive net utility
   },
@@ -155,7 +155,7 @@ const STRATEGIES: StrategyConfig[] = [
     weights: {
       coverage: 5.0,    // High reward
       excess: 1.0,      // Moderate penalty (avoids "Owner", accepts small overlap)
-      roleCount: 1.5
+      roleCount: 0.1
     },
     threshold: 0 // Accept neutral or positive utility
   }
@@ -287,7 +287,7 @@ export function runWeightedAnalysis(
   roles: RoleDefinition[],
   config: StrategyConfig
 ): SuggestedRole {
-  const MAX_COMBINATION_SIZE = 5;
+  const MAX_COMBINATION_SIZE = 10;
   let bestCombination: RoleDefinition[] = [];
   let bestScore = -Infinity;
   let bestCovered = new Set<string>();
@@ -443,11 +443,5 @@ function calculateConfidence(totalNeeded: number, covered: number, excessCount: 
   if (totalNeeded === 0) return 100;
 
   const coverageRatio = covered / totalNeeded; // 0 to 1
-
-  // Penalty logic for confidence score (visual indicator only)
-  const noiseRatio = excessCount / (totalNeeded + 5);
-  const penalty = Math.min(noiseRatio * 0.5, 0.3);
-
-  let score = (coverageRatio - penalty) * 100;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return Math.max(0, Math.min(100, Math.round(coverageRatio * 100)));
 }
