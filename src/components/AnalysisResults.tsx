@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
 import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon } from './Icons';
 import { PermissionVisualizer } from './PermissionVisualizer';
@@ -232,6 +232,24 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     const [showSuggestions, setShowSuggestions] = React.useState<Record<string, boolean>>({});
     const [showCoverageDetails, setShowCoverageDetails] = React.useState<Record<string, boolean>>({});
 
+    // Ref and handler for horizontal scroll on mouse wheel
+    const chartScrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = chartScrollRef.current;
+        if (!el) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            if (el.scrollWidth > el.clientWidth) {
+                e.preventDefault();
+                el.scrollLeft += e.deltaY;
+            }
+        };
+
+        el.addEventListener('wheel', handleWheel, { passive: false });
+        return () => el.removeEventListener('wheel', handleWheel);
+    }, []);
+
     const toggleSuggestion = (id: string) => {
         setShowSuggestions(prev => ({
             ...prev,
@@ -462,46 +480,53 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="md:col-span-3 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700" style={{ height: '392px' }}>
                     <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Coverage Distribution</h4>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={activeData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
-                            <XAxis
-                                dataKey="name"
-                                stroke="#9ca3af"
-                                fontSize={10}
-                                tickLine={false}
-                                axisLine={false}
-                                interval={0}
-                                angle={-45}
-                                textAnchor="end"
-                                height={80}
-                                tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
-                            />
-                            <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} unit="%" />
-                            <Tooltip
-                                content={<CustomTooltip />}
-                                cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
-                            />
-                            <Bar
-                                dataKey="coveragePct"
-                                shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={20} gap={2} />}
-                                barSize={20}
-                                isAnimationActive={true}
-                            />
-                            <Bar
-                                dataKey="excessPct"
-                                shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={20} gap={2} />}
-                                barSize={20}
-                                isAnimationActive={true}
-                            />
-                            <Bar
-                                dataKey="missingPct"
-                                shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={20} gap={2} />}
-                                barSize={20}
-                                isAnimationActive={true}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <div
+                        ref={chartScrollRef}
+                        className="overflow-x-auto overflow-y-hidden h-[calc(100%-24px)]"
+                    >
+                        <div style={{ minWidth: Math.max(600, activeData.length * 80), height: '100%' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={activeData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
+                                    <XAxis
+                                        dataKey="name"
+                                        stroke="#9ca3af"
+                                        fontSize={10}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval={0}
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={80}
+                                        tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
+                                    />
+                                    <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} unit="%" />
+                                    <Tooltip
+                                        content={<CustomTooltip />}
+                                        cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
+                                    />
+                                    <Bar
+                                        dataKey="coveragePct"
+                                        shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={20} gap={2} />}
+                                        barSize={20}
+                                        isAnimationActive={true}
+                                    />
+                                    <Bar
+                                        dataKey="excessPct"
+                                        shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={20} gap={2} />}
+                                        barSize={20}
+                                        isAnimationActive={true}
+                                    />
+                                    <Bar
+                                        dataKey="missingPct"
+                                        shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={20} gap={2} />}
+                                        barSize={20}
+                                        isAnimationActive={true}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
 
 

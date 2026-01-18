@@ -117,7 +117,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
         downloadFile(json, `${vaultName}-migration-${timestamp}.json`, 'application/json');
         break;
       case 'powershell':
-        const ps = exportToPowerShell(results, selectedRoles, resolvedNames, vaultName, selectedSub.subscriptionId);
+        const ps = exportToPowerShell(
+          results,
+          selectedRoles,
+          resolvedNames,
+          vaultName,
+          selectedSub.subscriptionId,
+          selectedVault.id
+        );
         downloadFile(ps, `${vaultName}-migration-${timestamp}.ps1`, 'text/plain');
         break;
     }
@@ -144,7 +151,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
 
         // Enhance with existing coverage check
         const enhancedAnalysis = analysis.map(a => {
-          const coverage = analyzeExistingCoverage(a.originalPolicy, roleAssignments, availableRoles);
+          const coverage = analyzeExistingCoverage(
+            a.originalPolicy,
+            roleAssignments,
+            availableRoles,
+            selectedVault?.id
+          );
           return { ...a, existingCoverage: coverage };
         });
 

@@ -200,8 +200,9 @@ export const analyzePolicies = (
 ): MigrationAnalysis[] => {
 
   // Filter roles to those relevant to Key Vault
-  const kvRoles = availableRoles.filter(r => {
-    return r.properties.permissions.some(p =>
+  const kvRoles = (availableRoles || []).filter(r => {
+    return (r.properties.permissions || []).some(p =>
+      Array.isArray(p.dataActions) && p.dataActions.length > 0 &&
       p.dataActions.some(da => da.toLowerCase().includes('microsoft.keyvault'))
     );
   });
@@ -228,10 +229,22 @@ export const analyzePolicies = (
 export const analyzeExistingCoverage = (
   policy: AccessPolicyEntry,
   assignments: RoleAssignment[],
-  availableRoles: RoleDefinition[]
+  availableRoles: RoleDefinition[],
+  scopeFilter?: string
 ): ExistingCoverageResult => {
   const requiredActions = getRequiredActions(policy);
-  const userAssignments = assignments.filter(a => a.properties.principalId === policy.objectId);
+  const userAssignments = assignments.filter(a => {
+    const samePrincipal = a.properties.principalId === policy.objectId;
+    if (!samePrincipal) return false;
+
+    if (!scopeFilter) return true;
+
+    const scope = (a.properties.scope || '').toLowerCase();
+    const target = scopeFilter.toLowerCase();
+
+    // Accept exact match or child scopes under the vault
+    return scope === target || scope.startsWith(target + '/');
+  });
 
   const covered = new Set<string>();
   const excess = new Set<string>();
@@ -327,12 +340,6 @@ export function runWeightedAnalysis(
 
 
   let effectiveLimit = MAX_COMBINATION_SIZE;
-  // if (usefulRoles.length > 20) {
-  //   // If we have many useful roles, cap recursion to 3 to prevent freeze
-  //   effectiveLimit = 3;
-  //   console.warn(`Too many useful roles (${usefulRoles.length}). Capping combination depth to 3.`);
-  // }
-
 
   const generateCombinations = (
     startIdx: number,

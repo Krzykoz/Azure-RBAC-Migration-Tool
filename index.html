@@ -70,6 +70,109 @@
 </head>
 
 <body class="bg-neutral-100 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 antialiased">
+  <style>
+    /* Custom scrollbar styles for horizontal and vertical scroll */
+    .overflow-x-auto::-webkit-scrollbar,
+    .overflow-y-auto::-webkit-scrollbar,
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .overflow-x-auto::-webkit-scrollbar-track,
+    .overflow-y-auto::-webkit-scrollbar-track,
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f3f2f1;
+      border-radius: 4px;
+    }
+
+    .overflow-x-auto::-webkit-scrollbar-thumb,
+    .overflow-y-auto::-webkit-scrollbar-thumb,
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #c8c6c4;
+      border-radius: 4px;
+    }
+
+    .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+    .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #a19f9d;
+    }
+
+    /* Dark mode scrollbar */
+    .dark .overflow-x-auto::-webkit-scrollbar-track,
+    .dark .overflow-y-auto::-webkit-scrollbar-track,
+    .dark .custom-scrollbar::-webkit-scrollbar-track {
+      background: #323130;
+    }
+
+    .dark .overflow-x-auto::-webkit-scrollbar-thumb,
+    .dark .overflow-y-auto::-webkit-scrollbar-thumb,
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #605e5c;
+    }
+
+    .dark .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+    .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #a19f9d;
+    }
+
+    /* Firefox scrollbar */
+    .overflow-x-auto,
+    .overflow-y-auto,
+    .custom-scrollbar {
+      scrollbar-width: thin;
+      scrollbar-color: #c8c6c4 #f3f2f1;
+    }
+
+    .dark .overflow-x-auto,
+    .dark .overflow-y-auto,
+    .dark .custom-scrollbar {
+      scrollbar-color: #605e5c #323130;
+    }
+
+    /* Scrollbar-thin utility */
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #f3f2f1;
+      border-radius: 3px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #c8c6c4;
+      border-radius: 3px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #a19f9d;
+    }
+
+    .dark .scrollbar-thin::-webkit-scrollbar-track {
+      background: #323130;
+    }
+
+    .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #605e5c;
+    }
+
+    .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #a19f9d;
+    }
+
+    .scrollbar-thin {
+      scrollbar-width: thin;
+      scrollbar-color: #c8c6c4 #f3f2f1;
+    }
+
+    .dark .scrollbar-thin {
+      scrollbar-color: #605e5c #323130;
+    }
+  </style>
   <div id="root"></div>
   <script type="module" src="/src/index.tsx"></script>
 </body>
