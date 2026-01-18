@@ -1,9 +1,41 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
 import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon } from './Icons';
 import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+
+// Custom Checkbox Component
+const CustomCheckbox: React.FC<{
+    checked: boolean;
+    indeterminate?: boolean;
+    onChange: (checked: boolean) => void;
+    disabled?: boolean;
+    className?: string;
+}> = ({ checked, indeterminate, onChange, disabled, className }) => (
+    <button
+        type="button"
+        role="checkbox"
+        aria-checked={indeterminate ? 'mixed' : checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all shrink-0 ${checked || indeterminate
+            ? 'bg-brand-600 border-brand-600 text-white'
+            : 'bg-white dark:bg-neutral-700 border-neutral-300 dark:border-neutral-500 hover:border-brand-400'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${className || ''}`}
+    >
+        {checked && (
+            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 6l3 3 5-5" />
+            </svg>
+        )}
+        {indeterminate && !checked && (
+            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 6h8" />
+            </svg>
+        )}
+    </button>
+);
 
 // Custom Shape to handle Centering + Animation
 const CenteredBar = (props: any) => {
@@ -114,6 +146,8 @@ interface AnalysisResultsProps {
     setSelectedRoles: React.Dispatch<React.SetStateAction<Record<string, number>>>;
     resolvedNames: Record<string, { name: string, type: IdentityType }>;
     theme: 'light' | 'dark';
+    selectedForExport: Set<string>;
+    setSelectedForExport: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
@@ -121,7 +155,9 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     selectedRoles,
     setSelectedRoles,
     resolvedNames,
-    theme
+    theme,
+    selectedForExport,
+    setSelectedForExport
 }) => {
 
     // Grouping Logic - STRICT ORDER: Apps -> Groups -> Users -> Unknown
@@ -272,11 +308,75 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         }));
     };
 
+    // Selection helpers
+    const toggleItemSelection = (objectId: string) => {
+        setSelectedForExport(prev => {
+            const next = new Set(prev);
+            if (next.has(objectId)) {
+                next.delete(objectId);
+            } else {
+                next.add(objectId);
+            }
+            return next;
+        });
+    };
+
+    const toggleCategorySelection = (groupData: MigrationAnalysis[]) => {
+        const ids = groupData.map(r => r.originalPolicy.objectId);
+        const allSelected = ids.every(id => selectedForExport.has(id));
+
+        setSelectedForExport(prev => {
+            const next = new Set(prev);
+            if (allSelected) {
+                ids.forEach(id => next.delete(id));
+            } else {
+                ids.forEach(id => next.add(id));
+            }
+            return next;
+        });
+    };
+
+    const toggleAllSelection = () => {
+        const allIds = results.map(r => r.originalPolicy.objectId);
+        const allSelected = allIds.every(id => selectedForExport.has(id));
+
+        setSelectedForExport(prev => {
+            if (allSelected) {
+                return new Set();
+            } else {
+                return new Set(allIds);
+            }
+        });
+    };
+
+    const getAllSelectionState = (): 'all' | 'some' | 'none' => {
+        const allIds = results.map(r => r.originalPolicy.objectId);
+        const selectedCount = allIds.filter(id => selectedForExport.has(id)).length;
+        if (selectedCount === 0) return 'none';
+        if (selectedCount === allIds.length) return 'all';
+        return 'some';
+    };
+
+    const getCategorySelectionState = (groupData: MigrationAnalysis[]): 'all' | 'some' | 'none' => {
+        const ids = groupData.map(r => r.originalPolicy.objectId);
+        const selectedCount = ids.filter(id => selectedForExport.has(id)).length;
+        if (selectedCount === 0) return 'none';
+        if (selectedCount === ids.length) return 'all';
+        return 'some';
+    };
+
     const renderIdentityGroup = (title: string, groupData: MigrationAnalysis[], icon: React.ReactNode) => {
         if (groupData.length === 0) return null;
+        const selectionState = getCategorySelectionState(groupData);
+
         return (
             <React.Fragment>
-                <div className="px-6 py-2 bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 font-semibold text-xs text-neutral-800 dark:text-neutral-300 uppercase tracking-wider flex items-center gap-2 sticky top-0 z-10">
+                <div className="px-6 py-2 bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 font-semibold text-xs text-neutral-800 dark:text-neutral-300 uppercase tracking-wider sticky top-0 z-10 flex items-center gap-4">
+                    <CustomCheckbox
+                        checked={selectionState === 'all'}
+                        indeterminate={selectionState === 'some'}
+                        onChange={() => toggleCategorySelection(groupData)}
+                    />
                     {icon}
                     {title} <span className="ml-1 opacity-60">({groupData.length})</span>
                 </div>
@@ -294,12 +394,19 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         const showRecs = !isFullyCovered || showSuggestions[res.originalPolicy.objectId];
                         const showDetails = showCoverageDetails[res.originalPolicy.objectId];
 
+                        const isSelected = selectedForExport.has(res.originalPolicy.objectId);
+
                         return (
                             <div key={res.originalPolicy.objectId} className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
                                 <div className="grid grid-cols-12 gap-4 px-6 py-4 items-start">
                                     {/* Identity Column */}
                                     <div className="col-span-3 pr-2">
-                                        <div className="flex items-start gap-2">
+                                        <div className="flex items-start gap-4">
+                                            <CustomCheckbox
+                                                checked={isSelected}
+                                                onChange={() => toggleItemSelection(res.originalPolicy.objectId)}
+                                                className="mt-1"
+                                            />
                                             <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 ${isKnown ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
                                                 }`}>
                                                 {currentType === 'User' && <UserIcon className="w-4 h-4" />}
@@ -557,7 +664,14 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">Identity Mapping</h3>
                 <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-hidden">
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
-                        <div className="col-span-3">Identity</div>
+                        <div className="col-span-3 flex items-center gap-4">
+                            <CustomCheckbox
+                                checked={getAllSelectionState() === 'all'}
+                                indeterminate={getAllSelectionState() === 'some'}
+                                onChange={toggleAllSelection}
+                            />
+                            Identity
+                        </div>
                         <div className="col-span-4">Recommended Role Combination</div>
                         <div className="col-span-2 text-right">Coverage</div>
                         <div className="col-span-3">Gap Analysis</div>

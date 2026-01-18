@@ -31,6 +31,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
   // Stores Resolved Identity Info: { ID: { name: 'Alice', type: 'User' } }
   const [resolvedNames, setResolvedNames] = useState<Record<string, { name: string, type: IdentityType }>>({});
   const [showExportMenu, setShowExportMenu] = useState(false);
+  // Selection for export - Set of object IDs
+  const [selectedForExport, setSelectedForExport] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadSubs = async () => {
@@ -101,24 +103,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
     }
   }, [results, graphToken, armToken, offlineData]);
 
+  // Re-initialize export selection when resolvedNames updates
+  useEffect(() => {
+    if (results.length > 0 && Object.keys(resolvedNames).length > 0) {
+      const exportIds = new Set<string>();
+      results.forEach(r => {
+        const resolvedType = resolvedNames[r.originalPolicy.objectId]?.type;
+        const policyType = r.originalPolicy.type;
+        const type = resolvedType || policyType || 'Unknown';
+        if (type !== 'Unknown') {
+          exportIds.add(r.originalPolicy.objectId);
+        }
+      });
+      setSelectedForExport(exportIds);
+    }
+  }, [resolvedNames, results]);
+
   const handleExport = (format: 'csv' | 'json' | 'powershell') => {
     if (!selectedVault || !selectedSub) return;
+
+    // Filter results by selection
+    const filteredResults = results.filter(r => selectedForExport.has(r.originalPolicy.objectId));
+    if (filteredResults.length === 0) {
+      alert('Please select at least one identity to export.');
+      return;
+    }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const vaultName = selectedVault.name;
 
     switch (format) {
       case 'csv':
-        const csv = exportToCSV(results, selectedRoles, resolvedNames);
+        const csv = exportToCSV(filteredResults, selectedRoles, resolvedNames);
         downloadFile(csv, `${vaultName}-migration-${timestamp}.csv`, 'text/csv');
         break;
       case 'json':
-        const json = exportToJSON(results, selectedRoles, resolvedNames);
+        const json = exportToJSON(filteredResults, selectedRoles, resolvedNames);
         downloadFile(json, `${vaultName}-migration-${timestamp}.json`, 'application/json');
         break;
       case 'powershell':
         const ps = exportToPowerShell(
-          results,
+          filteredResults,
           selectedRoles,
           resolvedNames,
           vaultName,
@@ -192,6 +217,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
           defaults[a.originalPolicy.objectId] = bestIndex;
         });
         setSelectedRoles(defaults);
+
+        // Initialize export selection - all except Unknown
+        const exportIds = new Set<string>();
+        enhancedAnalysis.forEach(a => {
+          const resolvedType = resolvedNames[a.originalPolicy.objectId]?.type;
+          const policyType = a.originalPolicy.type;
+          const type = resolvedType || policyType || 'Unknown';
+          if (type !== 'Unknown') {
+            exportIds.add(a.originalPolicy.objectId);
+          }
+        });
+        setSelectedForExport(exportIds);
+
         setStatus(MigrationStatus.COMPLETE);
       }, 500);
     } catch (err) {
@@ -415,6 +453,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
                 setSelectedRoles={setSelectedRoles}
                 resolvedNames={resolvedNames}
                 theme={theme}
+                selectedForExport={selectedForExport}
+                setSelectedForExport={setSelectedForExport}
               />
             )}
           </div>
