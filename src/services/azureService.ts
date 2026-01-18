@@ -101,7 +101,21 @@ export const getRoleDefinitions = async (token: string, subscriptionId: string):
 
   try {
     const data = await azureFetch<RoleDefinitionResponse>(url, token);
-    return parseRoleDefinitions(data);
+    const roles = parseRoleDefinitions(data);
+    // Filter to strictly match user request:
+    // --query "[?contains(join(',', permissions[].dataActions[]), 'Microsoft.KeyVault')]"
+    return roles.filter(role => {
+      const perms = role.properties.permissions;
+      if (!perms || perms.length === 0) return false;
+
+      // Flatten all dataActions
+      const allDataActions = perms
+        .flatMap(p => p.dataActions || []);
+
+      // Join and check
+      // Note: We use case-insensitive check to be safe, as the provider string is Microsoft.KeyVault
+      return allDataActions.join(',').toLowerCase().includes('microsoft.keyvault');
+    });
   } catch (e) {
     console.error("Failed to fetch role definitions", e);
     return [];

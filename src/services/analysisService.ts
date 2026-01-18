@@ -200,9 +200,8 @@ export const analyzePolicies = (
 ): MigrationAnalysis[] => {
 
   // Filter roles to those relevant to Key Vault
-  const kvRoles = (availableRoles || []).filter(r => {
-    return (r.properties.permissions || []).some(p =>
-      Array.isArray(p.dataActions) && p.dataActions.length > 0 &&
+  const kvRoles = availableRoles.filter(r => {
+    return r.properties.permissions.some(p =>
       p.dataActions.some(da => da.toLowerCase().includes('microsoft.keyvault'))
     );
   });
