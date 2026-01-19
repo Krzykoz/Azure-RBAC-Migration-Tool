@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
-import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon } from './Icons';
+import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon, CompoundIdentityIcon } from './Icons';
 import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
@@ -160,9 +160,10 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     setSelectedForExport
 }) => {
 
-    // Grouping Logic - STRICT ORDER: Apps -> Groups -> Users -> Unknown
+    // Grouping Logic - STRICT ORDER: Apps -> Compound -> Groups -> Users -> Unknown
     const groupedResults = useMemo(() => {
         const groups: Record<string, MigrationAnalysis[]> = {
+            'CompoundIdentity': [],
             'Application': [],
             'ServicePrincipal': [],
             'Group': [],
@@ -175,7 +176,11 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
             // Priority: Resolved Type (Graph) -> Cached Type (ARM) -> 'Unknown'
             let type = resolvedNames[id]?.type || res.originalPolicy.type || 'Unknown';
 
-            if (groups[type]) {
+            // Compound identities have both objectId and applicationId (non-empty)
+            const hasApplicationId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
+            if (hasApplicationId) {
+                groups['CompoundIdentity'].push(res);
+            } else if (groups[type]) {
                 groups[type].push(res);
             } else {
                 groups['Unknown'].push(res);
@@ -189,6 +194,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         const sortedResults = [
             ...groupedResults['Application'],
             ...groupedResults['ServicePrincipal'],
+            ...groupedResults['CompoundIdentity'],
             ...groupedResults['Group'],
             ...groupedResults['User'],
             ...groupedResults['Unknown']
@@ -198,7 +204,14 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
             const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
             const rec = r.recommendations[selectedIdx];
             const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-            const displayName = resolvedInfo?.name || r.originalPolicy.displayName;
+            // For compound identities, show "SP Name on behalf of (App Name)"
+            let displayName = resolvedInfo?.name || r.originalPolicy.displayName;
+            const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
+            if (hasAppId && displayName) {
+                const appInfo = resolvedNames[r.originalPolicy.applicationId!];
+                const appName = appInfo?.name || r.originalPolicy.applicationId;
+                displayName = `${displayName} on behalf of (${appName})`;
+            }
 
             const covered = rec?.coveredPermissions?.length || 0;
             const missing = rec?.missingPermissions?.length || 0;
@@ -386,7 +399,14 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         const activeRec = res.recommendations[selectedRoleIdx];
 
                         const resolvedInfo = resolvedNames[res.originalPolicy.objectId];
-                        const displayName = resolvedInfo?.name || res.originalPolicy.displayName;
+                        // For compound identities (objectId + applicationId), show "SP Name on behalf of (App Name)"
+                        let displayName = resolvedInfo?.name || res.originalPolicy.displayName;
+                        const hasAppId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
+                        if (hasAppId && displayName) {
+                            const appInfo = resolvedNames[res.originalPolicy.applicationId!];
+                            const appName = appInfo?.name || res.originalPolicy.applicationId;
+                            displayName = `${displayName} on behalf of (${appName})`;
+                        }
                         // Use the type from graph resolution if available, else fallback to ARM info
                         const currentType = resolvedInfo?.type || res.originalPolicy.type;
                         const isKnown = !!displayName;
@@ -409,10 +429,11 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                             />
                                             <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 ${isKnown ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
                                                 }`}>
-                                                {currentType === 'User' && <UserIcon className="w-4 h-4" />}
-                                                {currentType === 'Group' && <GroupIcon className="w-4 h-4" />}
-                                                {(currentType === 'ServicePrincipal' || currentType === 'Application') && <AppIcon className="w-4 h-4" />}
-                                                {currentType === 'Unknown' && <UnknownIcon className="w-4 h-4" />}
+                                                {hasAppId && <CompoundIdentityIcon className="w-4 h-4" />}
+                                                {!hasAppId && currentType === 'User' && <UserIcon className="w-4 h-4" />}
+                                                {!hasAppId && currentType === 'Group' && <GroupIcon className="w-4 h-4" />}
+                                                {!hasAppId && (currentType === 'ServicePrincipal' || currentType === 'Application') && <AppIcon className="w-4 h-4" />}
+                                                {!hasAppId && currentType === 'Unknown' && <UnknownIcon className="w-4 h-4" />}
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 {isKnown ? (
@@ -432,7 +453,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
 
                                                 {/* Details about Type and AppID if available */}
                                                 <div className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-1 flex flex-col gap-0.5">
-                                                    {res.originalPolicy.applicationId && (
+                                                    {hasAppId && (
                                                         <span title="Application ID">App ID: {res.originalPolicy.applicationId}</span>
                                                     )}
                                                     {currentType !== 'Unknown' && (
@@ -677,8 +698,9 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         <div className="col-span-3">Gap Analysis</div>
                     </div>
 
-                    {/* Render Groups Ordered: Apps, Groups, Users, Unknown */}
+                    {/* Render Groups Ordered: Apps, Compound, Groups, Users, Unknown */}
                     {renderIdentityGroup('Applications & Service Principals', [...groupedResults['Application'], ...groupedResults['ServicePrincipal']], <AppIcon className="w-4 h-4" />)}
+                    {renderIdentityGroup('Compound Identities', groupedResults['CompoundIdentity'], <CompoundIdentityIcon className="w-4 h-4" />)}
                     {renderIdentityGroup('Groups', groupedResults['Group'], <GroupIcon className="w-4 h-4" />)}
                     {renderIdentityGroup('Users', groupedResults['User'], <UserIcon className="w-4 h-4" />)}
                     {renderIdentityGroup('Unknown Identities', groupedResults['Unknown'], <UnknownIcon className="w-4 h-4" />)}

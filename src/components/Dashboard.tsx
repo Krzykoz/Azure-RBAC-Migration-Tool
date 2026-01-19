@@ -96,8 +96,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
   // Trigger Identity Resolution when results are generated
   useEffect(() => {
     if (results.length > 0 && !offlineData) {
-      const objectIds = results.map(r => r.originalPolicy.objectId);
-      resolveBatchIdentities(objectIds, graphToken || armToken).then(map => {
+      // Collect both objectId and applicationId values for resolution
+      const idsToResolve: string[] = [];
+      results.forEach(r => {
+        idsToResolve.push(r.originalPolicy.objectId);
+        // Only include applicationId if it's a non-empty string
+        if (r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '') {
+          idsToResolve.push(r.originalPolicy.applicationId);
+        }
+      });
+      resolveBatchIdentities(idsToResolve, graphToken || armToken).then(map => {
         setResolvedNames(prev => ({ ...prev, ...map }));
       });
     }
