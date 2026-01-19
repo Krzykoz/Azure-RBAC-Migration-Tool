@@ -26,13 +26,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
   const [status, setStatus] = useState<MigrationStatus>(MigrationStatus.LOADING);
   const [results, setResults] = useState<MigrationAnalysis[]>([]);
 
-  // Progress tracking for analysis
-  const [analysisProgress, setAnalysisProgress] = useState<{ current: number; total: number; message: string }>({
-    current: 0,
-    total: 0,
-    message: ''
-  });
-
   // Selection state for multiple recommendations. Default to index 2 (Balanced) usually, but here 0
   const [selectedRoles, setSelectedRoles] = useState<Record<string, number>>({});
   // Stores Resolved Identity Info: { ID: { name: 'Alice', type: 'User' } }
@@ -178,60 +171,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
     if (!selectedVault) return;
     setStatus(MigrationStatus.ANALYZING);
 
-    const policies = selectedVault.accessPolicies;
-    const total = policies.length;
-
-    // Reset progress
-    setAnalysisProgress({ current: 0, total, message: 'Initializing analysis...' });
-
     try {
       // Filter roles based on toggle
       const rolesToAnalyze = includeCustomRoles
         ? availableRoles
         : availableRoles.filter(r => r.properties.type === 'BuiltInRole');
 
-      const enhancedAnalysis: MigrationAnalysis[] = [];
-      const defaults: Record<string, number> = {};
+      // Use local greedy analysis
+      // Small timeout to allow UI to render the spinner
+      setTimeout(() => {
+        const analysis = analyzePolicies(selectedVault.accessPolicies, rolesToAnalyze);
 
-      // Process each policy with progress tracking
-      for (let i = 0; i < policies.length; i++) {
-        const policy = policies[i];
-
-        // Update progress
-        setAnalysisProgress({
-          current: i + 1,
-          total,
-          message: `Analyzing policy ${i + 1} of ${total}...`
-        });
-
-        // Analyze single policy
-        const analysis = analyzePolicies([policy], rolesToAnalyze);
-
-        if (analysis.length > 0) {
-          const a = analysis[0];
-
-          // Enhance with existing coverage check
+        // Enhance with existing coverage check
+        const enhancedAnalysis = analysis.map(a => {
           const coverage = analyzeExistingCoverage(
             a.originalPolicy,
             roleAssignments,
             availableRoles,
             selectedVault?.id
           );
-          const enhanced = { ...a, existingCoverage: coverage };
-          enhancedAnalysis.push(enhanced);
+          return { ...a, existingCoverage: coverage };
+        });
 
-          // Calculate best recommendation
+        setResults(enhancedAnalysis);
+        const defaults: Record<string, number> = {};
+
+        enhancedAnalysis.forEach(a => {
           let bestIndex = 0;
           let bestConfidence = a.recommendations[0]?.confidence || 0;
 
-          for (let j = 1; j < a.recommendations.length; j++) {
-            const currentConfidence = a.recommendations[j].confidence;
+          for (let i = 1; i < a.recommendations.length; i++) {
+            const currentConfidence = a.recommendations[i].confidence;
 
             if (currentConfidence > bestConfidence) {
-              bestIndex = j;
+              bestIndex = i;
               bestConfidence = currentConfidence;
             } else if (currentConfidence === bestConfidence) {
-              const currentStrategy = a.recommendations[j].strategy;
+              const currentStrategy = a.recommendations[i].strategy;
               const bestStrategy = a.recommendations[bestIndex].strategy;
 
               const priorityMap: Record<string, number> = {
@@ -241,38 +217,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
               };
 
               if ((priorityMap[currentStrategy] || 0) > (priorityMap[bestStrategy] || 0)) {
-                bestIndex = j;
+                bestIndex = i;
               }
             }
           }
 
           defaults[a.originalPolicy.objectId] = bestIndex;
-        }
-      }
+        });
+        setSelectedRoles(defaults);
 
-      // Final progress update
-      setAnalysisProgress({
-        current: total,
-        total,
-        message: 'Finalizing results...'
-      });
+        // Initialize export selection - all except Unknown
+        const exportIds = new Set<string>();
+        enhancedAnalysis.forEach(a => {
+          const resolvedType = resolvedNames[a.originalPolicy.objectId]?.type;
+          const policyType = a.originalPolicy.type;
+          const type = resolvedType || policyType || 'Unknown';
+          if (type !== 'Unknown') {
+            exportIds.add(a.originalPolicy.objectId);
+          }
+        });
+        setSelectedForExport(exportIds);
 
-      setResults(enhancedAnalysis);
-      setSelectedRoles(defaults);
-
-      // Initialize export selection - all except Unknown
-      const exportIds = new Set<string>();
-      enhancedAnalysis.forEach(a => {
-        const resolvedType = resolvedNames[a.originalPolicy.objectId]?.type;
-        const policyType = a.originalPolicy.type;
-        const type = resolvedType || policyType || 'Unknown';
-        if (type !== 'Unknown') {
-          exportIds.add(a.originalPolicy.objectId);
-        }
-      });
-      setSelectedForExport(exportIds);
-
-      setStatus(MigrationStatus.COMPLETE);
+        setStatus(MigrationStatus.COMPLETE);
+      }, 500);
     } catch (err) {
       console.error(err);
       setStatus(MigrationStatus.ERROR);
@@ -477,66 +444,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ armToken, graphToken, them
             )}
 
             {status === MigrationStatus.ANALYZING && (
-              <div className="h-full flex flex-col items-center justify-center px-8">
-                {/* Progress Circle with Percentage */}
-                <div className="relative w-24 h-24 mb-6">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    {/* Background circle */}
-                    <circle
-                      className="text-neutral-200 dark:text-neutral-700"
-                      strokeWidth="8"
-                      stroke="currentColor"
-                      fill="transparent"
-                      r="42"
-                      cx="50"
-                      cy="50"
-                    />
-                    {/* Progress circle */}
-                    <circle
-                      className="text-brand-600 transition-all duration-300 ease-out"
-                      strokeWidth="8"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="transparent"
-                      r="42"
-                      cx="50"
-                      cy="50"
-                      style={{
-                        strokeDasharray: `${2 * Math.PI * 42}`,
-                        strokeDashoffset: `${2 * Math.PI * 42 * (1 - (analysisProgress.total > 0 ? analysisProgress.current / analysisProgress.total : 0))}`
-                      }}
-                    />
-                  </svg>
-                  {/* Percentage text in center */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
-                      {analysisProgress.total > 0 ? Math.round((analysisProgress.current / analysisProgress.total) * 100) : 0}%
-                    </span>
-                  </div>
+              <div className="h-full flex flex-col items-center justify-center">
+                <div className="relative w-20 h-20 mb-8">
+                  <div className="absolute inset-0 border-4 border-neutral-200 dark:border-neutral-700 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-brand-600 rounded-full border-t-transparent animate-spin"></div>
                 </div>
-
-                {/* Progress Bar */}
-                <div className="w-full max-w-md mb-4">
-                  <div className="h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-brand-600 to-brand-400 transition-all duration-300 ease-out rounded-full"
-                      style={{
-                        width: `${analysisProgress.total > 0 ? (analysisProgress.current / analysisProgress.total) * 100 : 0}%`
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Status Text */}
-                <p className="text-lg font-medium text-neutral-900 dark:text-neutral-200">
-                  {analysisProgress.message || 'Mapping Roles...'}
-                </p>
-                <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-                  {analysisProgress.current} of {analysisProgress.total} policies analyzed
-                </p>
-                <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-4 max-w-md text-center">
-                  Applying 3 weighted algorithmic strategies to determine optimal RBAC mappings.
-                </p>
+                <p className="text-lg font-medium text-neutral-900 dark:text-neutral-200">Mapping Roles...</p>
+                <p className="text-sm text-neutral-700 dark:text-neutral-400 mt-2 max-w-md text-center">Applying 3 weighted algorithmic strategies to determine optimal RBAC mappings.</p>
               </div>
             )}
 
