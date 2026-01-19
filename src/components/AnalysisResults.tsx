@@ -3,39 +3,8 @@ import { MigrationAnalysis, IdentityType } from '../types';
 import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon, CompoundIdentityIcon } from './Icons';
 import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-
-// Custom Checkbox Component
-const CustomCheckbox: React.FC<{
-    checked: boolean;
-    indeterminate?: boolean;
-    onChange: (checked: boolean) => void;
-    disabled?: boolean;
-    className?: string;
-}> = ({ checked, indeterminate, onChange, disabled, className }) => (
-    <button
-        type="button"
-        role="checkbox"
-        aria-checked={indeterminate ? 'mixed' : checked}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all shrink-0 ${checked || indeterminate
-            ? 'bg-brand-600 border-brand-600 text-white'
-            : 'bg-white dark:bg-neutral-700 border-neutral-300 dark:border-neutral-500 hover:border-brand-400'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${className || ''}`}
-    >
-        {checked && (
-            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M2 6l3 3 5-5" />
-            </svg>
-        )}
-        {indeterminate && !checked && (
-            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M2 6h8" />
-            </svg>
-        )}
-    </button>
-);
+import { Checkbox } from './ui';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Custom Shape to handle Centering + Animation
 const CenteredBar = (props: any) => {
@@ -385,7 +354,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         return (
             <React.Fragment>
                 <div className="px-6 py-2 bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 font-semibold text-xs text-neutral-800 dark:text-neutral-300 uppercase tracking-wider sticky top-0 z-10 flex items-center gap-4">
-                    <CustomCheckbox
+                    <Checkbox
                         checked={selectionState === 'all'}
                         indeterminate={selectionState === 'some'}
                         onChange={() => toggleCategorySelection(groupData)}
@@ -422,7 +391,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                     {/* Identity Column */}
                                     <div className="col-span-3 pr-2">
                                         <div className="flex items-start gap-4">
-                                            <CustomCheckbox
+                                            <Checkbox
                                                 checked={isSelected}
                                                 onChange={() => toggleItemSelection(res.originalPolicy.objectId)}
                                                 className="mt-1"
@@ -686,7 +655,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                 <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-hidden">
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
                         <div className="col-span-3 flex items-center gap-4">
-                            <CustomCheckbox
+                            <Checkbox
                                 checked={getAllSelectionState() === 'all'}
                                 indeterminate={getAllSelectionState() === 'some'}
                                 onChange={toggleAllSelection}

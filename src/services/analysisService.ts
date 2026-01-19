@@ -1,21 +1,16 @@
-
-import { AccessPolicyEntry, MigrationAnalysis, RoleDefinition, SuggestedRole, RoleBreakdown, RoleAssignment, ExistingCoverageResult } from "../types";
-import RBAC_MAPPING_CSV from "../assets/AcessPolicyRBACMapping.csv?raw";
-
+import {
+  AccessPolicyEntry,
+  MigrationAnalysis,
+  RoleDefinition,
+  SuggestedRole,
+  RoleBreakdown,
+  RoleAssignment,
+  ExistingCoverageResult,
+} from '../types';
+import { ANALYSIS_STRATEGIES, ANALYSIS_CONSTANTS, StrategyConfig } from '../constants';
+import RBAC_MAPPING_CSV from '../assets/AcessPolicyRBACMapping.csv?raw';
 
 type PermissionMap = Record<string, Record<string, string[]>>;
-
-
-interface StrategyConfig {
-  name: string;
-  description: string;
-  weights: {
-    coverage: number; // Reward per permission covered
-    excess: number;   // Penalty per excess permission
-    roleCount: number; // Penalty per additional role (to prevent fragmentation)
-  };
-  threshold: number; // Minimum score required to accept a role
-}
 
 
 const parsePermissionMap = (csvContent: string): PermissionMap => {
@@ -126,41 +121,6 @@ const getRequiredActions = (policy: AccessPolicyEntry): Set<string> => {
   return actions;
 };
 
-
-
-const STRATEGIES: StrategyConfig[] = [
-  {
-    name: 'Max Coverage',
-    description: 'Prioritizes covering all permissions, even if it means granting some excess access.',
-    weights: {
-      coverage: 10.0,   // Huge reward for coverage
-      excess: 0.15,     // Low penalty for excess (tolerant of "dirty" roles, but prefers cleaner ones)
-      roleCount: 0.1    // Lower penalty for adding roles (encourages combining granular roles)
-    },
-    threshold: -100 // Accept almost anything that adds value
-  },
-  {
-    name: 'Minimize Excess',
-    description: 'Strictly avoids excess permissions. May leave gaps if no clean role exists.',
-    weights: {
-      coverage: 2.0,    // Moderate reward
-      excess: 5.0,      // Huge penalty for excess (rejects "dirty" roles)
-      roleCount: 0.1
-    },
-    threshold: 0.1 // Only accept roles that have a positive net utility
-  },
-  {
-    name: 'Balanced',
-    description: 'A middle ground that seeks coverage while avoiding large security risks.',
-    weights: {
-      coverage: 5.0,    // High reward
-      excess: 1.0,      // Moderate penalty (avoids "Owner", accepts small overlap)
-      roleCount: 0.1
-    },
-    threshold: 0 // Accept neutral or positive utility
-  }
-];
-
 const mergeDuplicateStrategies = (strategies: SuggestedRole[]): SuggestedRole[] => {
   // Group strategies by their role signature (sorted, joined role names)
   const groupsBySignature = new Map<string, SuggestedRole[]>();
@@ -210,7 +170,7 @@ export const analyzePolicies = (
     const requiredActions = getRequiredActions(policy);
 
     // Run all 3 strategies for every policy
-    const allRecommendations: SuggestedRole[] = STRATEGIES.map(strategy =>
+    const allRecommendations: SuggestedRole[] = ANALYSIS_STRATEGIES.map((strategy) =>
       runWeightedAnalysis(requiredActions, kvRoles, strategy)
     );
 
@@ -299,66 +259,55 @@ export function runWeightedAnalysis(
   roles: RoleDefinition[],
   config: StrategyConfig
 ): SuggestedRole {
-  const MAX_COMBINATION_SIZE = 10;
+  const maxCombinations = ANALYSIS_CONSTANTS.MAX_COMBINATION_SIZE;
   let bestCombination: RoleDefinition[] = [];
   let bestScore = -Infinity;
   let bestCovered = new Set<string>();
   let bestExcess = new Set<string>();
 
-
   const evaluateCombination = (combo: RoleDefinition[]) => {
     const combinedCovered = new Set<string>();
     const combinedExcess = new Set<string>();
 
-    combo.forEach(role => {
+    combo.forEach((role) => {
       const { covered, excess } = calculateCoverage(required, role);
-      covered.forEach(c => combinedCovered.add(c));
-      excess.forEach(e => combinedExcess.add(e));
+      covered.forEach((c) => combinedCovered.add(c));
+      excess.forEach((e) => combinedExcess.add(e));
     });
 
-    // Score Calculation
     // Score = (Coverage * W_Cov) - (Excess * W_Exc) - (RoleCount * W_RoleCount)
-    const score = (combinedCovered.size * config.weights.coverage)
-      - (combinedExcess.size * config.weights.excess)
-      - ((combo.length - 1) * config.weights.roleCount); // Penalty for adding more roles
+    const score =
+      combinedCovered.size * config.weights.coverage -
+      combinedExcess.size * config.weights.excess -
+      (combo.length - 1) * config.weights.roleCount;
 
     if (score > bestScore) {
       bestScore = score;
-      bestCombination = [...combo]; // Clone the array!
+      bestCombination = [...combo];
       bestCovered = combinedCovered;
       bestExcess = combinedExcess;
     }
   };
 
-  // Generate all combinations up to MAX_COMBINATION_SIZE
-
-  const usefulRoles = roles.filter(r => {
+  // Filter to roles that cover at least one required permission
+  const usefulRoles = roles.filter((r) => {
     const { covered } = calculateCoverage(required, r);
     return covered.size > 0;
   });
 
-
-  let effectiveLimit = MAX_COMBINATION_SIZE;
-
-  const generateCombinations = (
-    startIdx: number,
-    currentCombo: RoleDefinition[]
-  ) => {
-
+  const generateCombinations = (startIdx: number, currentCombo: RoleDefinition[]) => {
     if (currentCombo.length > 0) {
       evaluateCombination(currentCombo);
     }
 
-
-    if (currentCombo.length >= effectiveLimit) {
+    if (currentCombo.length >= maxCombinations) {
       return;
     }
-
 
     for (let i = startIdx; i < usefulRoles.length; i++) {
       currentCombo.push(usefulRoles[i]);
       generateCombinations(i + 1, currentCombo);
-      currentCombo.pop(); // Backtrack
+      currentCombo.pop();
     }
   };
 
