@@ -343,8 +343,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         const selectedRoleIdx = selectedRoles[res.originalPolicy.objectId] || 0;
                         const activeRec = res.recommendations[selectedRoleIdx];
 
-                        const displayName = getResolvedDisplayName(res.originalPolicy, resolvedNames);
                         const resolvedInfo = resolvedNames[res.originalPolicy.objectId];
+                        const displayName = getResolvedDisplayName(res.originalPolicy, resolvedNames);
                         // Use the type from graph resolution if available, else fallback to ARM info
                         const currentType = resolvedInfo?.type || res.originalPolicy.type;
                         const isKnown = !!displayName;
