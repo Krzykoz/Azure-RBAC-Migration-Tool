@@ -21,6 +21,7 @@
   "build": {
     "appId": "com.krzykoz.azure-rbac-migrator",
     "productName": "Azure Key Vault RBAC Migrator",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -65,7 +66,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}-${os}-${arch}.${ext}"
     }
   },
   "dependencies": {
