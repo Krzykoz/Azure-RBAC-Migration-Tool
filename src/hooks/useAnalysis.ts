@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { analyzePolicies, analyzeExistingCoverage } from '../services/analysisService';
 import { STRATEGY_PRIORITY } from '../constants';
+import { getExportableIdentities } from '../utils/identityUtils';
 
 interface UseAnalysisProps {
     selectedVault: KeyVault | null;
@@ -106,15 +107,7 @@ export const useAnalysis = ({
                 setSelectedRoles(defaults);
 
                 // Initialize export selection (all except Unknown type)
-                const exportIds = new Set<string>();
-                enhancedAnalysis.forEach((a) => {
-                    const resolvedType = resolvedNames[a.originalPolicy.objectId]?.type;
-                    const policyType = a.originalPolicy.type;
-                    const type = resolvedType || policyType || 'Unknown';
-                    if (type !== 'Unknown') {
-                        exportIds.add(a.originalPolicy.objectId);
-                    }
-                });
+                const exportIds = getExportableIdentities(enhancedAnalysis, resolvedNames);
                 setSelectedForExport(exportIds);
 
                 resolve();

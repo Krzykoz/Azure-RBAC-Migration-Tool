@@ -79,15 +79,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Update export selection when resolved names change
   useEffect(() => {
     if (results.length > 0 && Object.keys(resolvedNames).length > 0) {
-      const exportIds = new Set<string>();
-      results.forEach((r) => {
-        const resolvedType = resolvedNames[r.originalPolicy.objectId]?.type;
-        const policyType = r.originalPolicy.type;
-        const type = resolvedType || policyType || 'Unknown';
-        if (type !== 'Unknown') {
-          exportIds.add(r.originalPolicy.objectId);
-        }
-      });
+      const exportIds = getExportableIdentities(results, resolvedNames);
       setSelectedForExport(exportIds);
     }
   }, [resolvedNames, results, setSelectedForExport]);

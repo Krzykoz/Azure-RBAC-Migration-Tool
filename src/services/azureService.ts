@@ -16,6 +16,7 @@ import {
   parseGraphResponse
 } from './azureResponseParser';
 import { AZURE_API_VERSIONS, AZURE_ENDPOINTS, ANALYSIS_CONSTANTS } from '../constants';
+import { processInChunks } from '../utils/arrayUtils';
 
 const { ARM, GRAPH } = AZURE_ENDPOINTS;
 const API = AZURE_API_VERSIONS;
@@ -157,11 +158,8 @@ export const resolveBatchIdentities = async (
 
   const uniqueIds = [...new Set(objectIds)];
   const results: Record<string, { name: string; type: IdentityType }> = {};
-  const chunkSize = ANALYSIS_CONSTANTS.GRAPH_BATCH_SIZE;
 
-  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
-    const chunk = uniqueIds.slice(i, i + chunkSize);
-
+  await processInChunks(uniqueIds, ANALYSIS_CONSTANTS.GRAPH_BATCH_SIZE, async (chunk) => {
     try {
       const response = await fetch(`${GRAPH}/directoryObjects/getByIds`, {
         method: 'POST',
@@ -186,7 +184,8 @@ export const resolveBatchIdentities = async (
     } catch (e) {
       console.debug('Graph API call failed', e);
     }
-  }
+    return [];
+  });
 
   return results;
 };
@@ -210,28 +209,25 @@ export const getKeyVaults = async (
     return [];
   }
 
-  const concurrencyLimit = ANALYSIS_CONSTANTS.VAULT_CONCURRENCY_LIMIT;
-  const results: KeyVault[] = [];
+  const results = await processInChunks(
+    listData.value,
+    ANALYSIS_CONSTANTS.VAULT_CONCURRENCY_LIMIT,
+    async (chunk) => {
+      const chunkPromises = chunk.map(async (resource) => {
+        try {
+          const vaultUrl = `${ARM}${resource.id}?api-version=${API.KEYVAULT}`;
+          const vaultData = await azureFetch<KeyVaultResponse>(vaultUrl, token);
+          return parseKeyVaultResponse(vaultData, principalTypeCache);
+        } catch (e) {
+          console.error(`Failed to fetch details for vault ${resource.id}`, e);
+          return null;
+        }
+      });
 
-  for (let i = 0; i < listData.value.length; i += concurrencyLimit) {
-    const chunk = listData.value.slice(i, i + concurrencyLimit);
-
-    const chunkPromises = chunk.map(async (resource) => {
-      try {
-        const vaultUrl = `${ARM}${resource.id}?api-version=${API.KEYVAULT}`;
-        const vaultData = await azureFetch<KeyVaultResponse>(vaultUrl, token);
-        return parseKeyVaultResponse(vaultData, principalTypeCache);
-      } catch (e) {
-        console.error(`Failed to fetch details for vault ${resource.id}`, e);
-        return null;
-      }
-    });
-
-    const chunkResults = await Promise.all(chunkPromises);
-    chunkResults.forEach((r) => {
-      if (r) results.push(r);
-    });
-  }
+      const chunkResults = await Promise.all(chunkPromises);
+      return chunkResults.filter((r): r is KeyVault => r !== null);
+    }
+  );
 
   return results;
 };

@@ -5,6 +5,8 @@ import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { Checkbox } from './ui';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { getResolvedDisplayName } from '../utils/identityUtils';
+import { toggleSetItem, toggleSetItems } from '../utils/setUtils';
 
 // Custom Shape to handle Centering + Animation
 const CenteredBar = (props: any) => {
@@ -172,15 +174,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         return sortedResults.map(r => {
             const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
             const rec = r.recommendations[selectedIdx];
-            const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-            // For compound identities, show "SP Name on behalf of (App Name)"
-            let displayName = resolvedInfo?.name || r.originalPolicy.displayName;
-            const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-            if (hasAppId && displayName) {
-                const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-                const appName = appInfo?.name || r.originalPolicy.applicationId;
-                displayName = `${displayName} on behalf of (${appName})`;
-            }
+            const displayName = getResolvedDisplayName(r.originalPolicy, resolvedNames);
 
             const covered = rec?.coveredPermissions?.length || 0;
             const missing = rec?.missingPermissions?.length || 0;
@@ -292,30 +286,12 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
 
     // Selection helpers
     const toggleItemSelection = (objectId: string) => {
-        setSelectedForExport(prev => {
-            const next = new Set(prev);
-            if (next.has(objectId)) {
-                next.delete(objectId);
-            } else {
-                next.add(objectId);
-            }
-            return next;
-        });
+        setSelectedForExport(prev => toggleSetItem(prev, objectId));
     };
 
     const toggleCategorySelection = (groupData: MigrationAnalysis[]) => {
         const ids = groupData.map(r => r.originalPolicy.objectId);
-        const allSelected = ids.every(id => selectedForExport.has(id));
-
-        setSelectedForExport(prev => {
-            const next = new Set(prev);
-            if (allSelected) {
-                ids.forEach(id => next.delete(id));
-            } else {
-                ids.forEach(id => next.add(id));
-            }
-            return next;
-        });
+        setSelectedForExport(prev => toggleSetItems(prev, ids));
     };
 
     const toggleAllSelection = () => {
@@ -367,15 +343,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         const selectedRoleIdx = selectedRoles[res.originalPolicy.objectId] || 0;
                         const activeRec = res.recommendations[selectedRoleIdx];
 
+                        const displayName = getResolvedDisplayName(res.originalPolicy, resolvedNames);
                         const resolvedInfo = resolvedNames[res.originalPolicy.objectId];
-                        // For compound identities (objectId + applicationId), show "SP Name on behalf of (App Name)"
-                        let displayName = resolvedInfo?.name || res.originalPolicy.displayName;
-                        const hasAppId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
-                        if (hasAppId && displayName) {
-                            const appInfo = resolvedNames[res.originalPolicy.applicationId!];
-                            const appName = appInfo?.name || res.originalPolicy.applicationId;
-                            displayName = `${displayName} on behalf of (${appName})`;
-                        }
                         // Use the type from graph resolution if available, else fallback to ARM info
                         const currentType = resolvedInfo?.type || res.originalPolicy.type;
                         const isKnown = !!displayName;
