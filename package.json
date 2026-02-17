@@ -60,7 +60,8 @@
           "arch": ["x64", "arm64"]
         }
       ],
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "Krzysztof Kozlik"
     },
     "nsis": {
       "oneClick": false,
