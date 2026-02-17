@@ -16,16 +16,16 @@ export const getResolvedDisplayName = (
     resolvedNames: Record<string, { name: string; type: IdentityType }>
 ): string => {
     const resolvedInfo = resolvedNames[policy.objectId];
-    let displayName = resolvedInfo?.name || policy.displayName || 'Unknown';
+    const baseName = resolvedInfo?.name || policy.displayName || 'Unknown';
     
     // Only append application info if we have a valid service principal name
-    if (hasApplicationId(policy) && displayName !== 'Unknown') {
+    if (hasApplicationId(policy) && baseName !== 'Unknown') {
         const appInfo = resolvedNames[policy.applicationId!];
         const appName = appInfo?.name || policy.applicationId;
-        displayName = `${displayName} on behalf of (${appName})`;
+        return `${baseName} on behalf of (${appName})`;
     }
     
-    return displayName;
+    return baseName;
 };
 
 /**
