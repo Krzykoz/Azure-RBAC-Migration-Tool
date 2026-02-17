@@ -1,5 +1,7 @@
 name: Build and Release Electron App
 
+# Builds desktop apps for Windows, macOS and Linux (x64 + arm64)
+
 on:
   push:
     tags:
