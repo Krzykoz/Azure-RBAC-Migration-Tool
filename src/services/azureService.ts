@@ -158,8 +158,11 @@ export const resolveBatchIdentities = async (
 
   const uniqueIds = [...new Set(objectIds)];
   const results: Record<string, { name: string; type: IdentityType }> = {};
+  const chunkSize = ANALYSIS_CONSTANTS.GRAPH_BATCH_SIZE;
 
-  await processInChunks(uniqueIds, ANALYSIS_CONSTANTS.GRAPH_BATCH_SIZE, async (chunk) => {
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+
     try {
       const response = await fetch(`${GRAPH}/directoryObjects/getByIds`, {
         method: 'POST',
@@ -184,8 +187,7 @@ export const resolveBatchIdentities = async (
     } catch (e) {
       console.debug('Graph API call failed', e);
     }
-    return [];
-  });
+  }
 
   return results;
 };

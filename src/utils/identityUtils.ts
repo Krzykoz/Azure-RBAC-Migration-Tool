@@ -18,7 +18,8 @@ export const getResolvedDisplayName = (
     const resolvedInfo = resolvedNames[policy.objectId];
     let displayName = resolvedInfo?.name || policy.displayName || 'Unknown';
     
-    if (hasApplicationId(policy)) {
+    // Only append application info if we have a valid service principal name
+    if (hasApplicationId(policy) && displayName !== 'Unknown') {
         const appInfo = resolvedNames[policy.applicationId!];
         const appName = appInfo?.name || policy.applicationId;
         displayName = `${displayName} on behalf of (${appName})`;
