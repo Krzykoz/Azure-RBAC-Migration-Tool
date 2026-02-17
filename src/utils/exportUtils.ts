@@ -1,5 +1,5 @@
 import { MigrationAnalysis, IdentityType } from '../types';
-import { getResolvedDisplayName, getIdentityType } from './identityUtils';
+import { getResolvedDisplayName, getIdentityType, getApplicationName } from './identityUtils';
 
 
 export const exportToCSV = (
@@ -45,12 +45,7 @@ export const exportToJSON = (
         const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
         const rec = r.recommendations[selectedIdx];
         const displayName = getResolvedDisplayName(r.originalPolicy, resolvedNames);
-        const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-        let appName: string | undefined = undefined;
-        if (hasAppId) {
-            const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-            appName = appInfo?.name || r.originalPolicy.applicationId;
-        }
+        const appName = getApplicationName(r.originalPolicy, resolvedNames);
 
         return {
             identity: {

@@ -4,6 +4,7 @@ import { useAzureData, useAnalysis, useExport, ExportFormat } from '../hooks';
 import { ArrowRightIcon, LoaderIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from './Icons';
 import { SidePanel } from './SidePanel';
 import { AnalysisResults } from './AnalysisResults';
+import { getExportableIdentities } from '../utils/identityUtils';
 
 interface DashboardProps {
   armToken: string;

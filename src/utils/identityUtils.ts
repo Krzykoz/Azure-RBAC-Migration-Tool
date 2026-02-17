@@ -38,6 +38,22 @@ export const getIdentityType = (
 };
 
 /**
+ * Gets the application name for compound identities
+ */
+export const getApplicationName = (
+    policy: AccessPolicyEntry,
+    resolvedNames: Record<string, { name: string; type: IdentityType }>
+): string | undefined => {
+    const hasAppId = policy.applicationId && policy.applicationId.trim() !== '';
+    if (!hasAppId) {
+        return undefined;
+    }
+    
+    const appInfo = resolvedNames[policy.applicationId!];
+    return appInfo?.name || policy.applicationId;
+};
+
+/**
  * Filters analysis results to get only exportable identities (non-Unknown types)
  */
 export const getExportableIdentities = (
