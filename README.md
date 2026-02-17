@@ -1,6 +1,8 @@
 # Azure Key Vault RBAC Migrator
 
-A browser‑only tool that helps you migrate Azure Key Vault access policies to modern RBAC role mappings. The app runs entirely in the client, never stores tokens, and provides visual analysis of permissions.
+A desktop and browser tool that helps you migrate Azure Key Vault access policies to modern RBAC role mappings. The app runs entirely on the client, never stores tokens, and provides visual analysis of permissions.
+
+Available as a downloadable Electron desktop app for **Windows**, **macOS**, and **Linux** (both x86 and ARM), or as a browser-based web app.
 
 ## Overview
 
@@ -12,13 +14,23 @@ A browser‑only tool that helps you migrate Azure Key Vault access policies to 
 - **Export results** – Download analysis as CSV, JSON, or PowerShell script.
 - **Dark / Light mode** – Tailwind‑based theming with enhanced contrast for readability.
 
+## Download
+
+Pre-built desktop apps are available on the [Releases](../../releases) page for:
+
+| Platform | Architecture | Format |
+|----------|-------------|--------|
+| Windows  | x64, ARM64  | NSIS installer, Portable |
+| macOS    | x64, ARM64  | DMG |
+| Linux    | x64, ARM64  | AppImage, DEB |
+
 ## Prerequisites
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed.
 - Access to Azure subscriptions with Key Vaults.
 - (Optional) Graph permissions to resolve identity names.
 
-## Setup
+## Development Setup
 
 ```bash
 # Clone the repo
@@ -28,19 +40,49 @@ cd Azure-RBAC-Migration-Tool
 # Install dependencies
 npm install
 
-# Run development server
+# Run as web app (browser)
 npm run dev
+
+# Run as Electron app (desktop)
+npm run dev:electron
 ```
 
-The app will be available at `http://localhost:3000` (Vite default).
+The web app will be available at `http://localhost:3000`.
 
-## Build for Production
+## Building
+
+### Web Build
 
 ```bash
 npm run build
 ```
 
-The production bundle is emitted to the `dist` folder, which is already ignored via `.gitignore`.
+The production bundle is emitted to the `dist` folder.
+
+### Desktop App Build
+
+```bash
+# Build for your current platform
+npm run dist
+
+# Build for a specific platform
+npm run dist:win     # Windows
+npm run dist:mac     # macOS
+npm run dist:linux   # Linux
+```
+
+Built installers are output to the `release` folder.
+
+## Automated Releases
+
+The repository includes a GitHub Actions workflow that automatically builds desktop apps for all platforms when a version tag is pushed:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers builds for Windows (x64/ARM64), macOS (x64/ARM64), and Linux (x64/ARM64), and creates a draft GitHub Release with all artifacts attached.
 
 ## Usage
 
@@ -60,6 +102,9 @@ The production bundle is emitted to the `dist` folder, which is already ignored 
 ## Architecture
 
 ```
+electron/
+├─ main.ts                       # Electron main process
+└─ preload.ts                    # Preload script (context bridge)
 src/
 ├─ components/               # React UI components
 │   ├─ Dashboard.tsx          # Main workspace
@@ -109,6 +154,8 @@ src/
 - **React 19**
 - **TypeScript**
 - **Vite**
+- **Electron** (desktop packaging)
+- **electron-builder** (multi-platform builds)
 - **Tailwind CSS**
 - **Recharts**
 
