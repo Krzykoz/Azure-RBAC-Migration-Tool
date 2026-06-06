@@ -243,6 +243,8 @@ export const ManualModePage: React.FC<ManualModePageProps> = ({ onBack }) => {
                         ).map(([value, label]) => (
                             <button
                                 key={value}
+                                type="button"
+                                aria-pressed={roleSource === value}
                                 onClick={() => setRoleSource(value)}
                                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                     roleSource === value

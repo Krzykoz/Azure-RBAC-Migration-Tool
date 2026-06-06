@@ -1,6 +1,7 @@
 {
-  "_comment": "Canonical Azure Key Vault data-plane built-in RBAC roles. This is DATA, not code: refresh it with `npm run update-roles` (which runs `az role definition list`). Source: Microsoft 'Azure built-in roles' documentation. Generated/verified: 2026-06.",
+  "_comment": "Canonical Azure Key Vault data-plane built-in RBAC roles. This is DATA, not code: refresh it with `npm run update-roles`. Source: `az role definition list`.",
   "_source": "az role definition list --query \"[?contains(to_string(permissions[].dataActions[]), 'Microsoft.KeyVault')]\" -o json",
+  "_generated": "2026-06-07",
   "value": [
     {
       "assignableScopes": ["/"],

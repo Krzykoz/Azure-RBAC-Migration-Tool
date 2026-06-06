@@ -55,6 +55,11 @@ const normalizeSingleRole = (raw: any): RoleDefinition | null => {
     const roleName = props?.roleName;
     if (!roleName || typeof roleName !== 'string') return null;
 
+    const permissions = normalizePermissions(props.permissions);
+    // A role with no permission entries cannot cover anything; drop it so it
+    // never silently appears to parse and then yields no matches downstream.
+    if (permissions.length === 0) return null;
+
     return {
         id: raw.id ?? '',
         name: raw.name ?? '',
@@ -63,7 +68,7 @@ const normalizeSingleRole = (raw: any): RoleDefinition | null => {
             roleName,
             description: props.description ?? '',
             type: props.type ?? 'BuiltInRole',
-            permissions: normalizePermissions(props.permissions),
+            permissions,
             assignableScopes: toStringArray(props.assignableScopes),
         },
     };
