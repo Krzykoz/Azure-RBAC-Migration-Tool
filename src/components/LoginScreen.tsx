@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { validateToken } from '../services/azureService';
-import { WifiOffIcon } from './Icons';
+import { WifiOffIcon, ShieldCheckIcon } from './Icons';
 import { CopyableCommand } from './ui';
 
 interface LoginScreenProps {
   onLogin: (armToken: string, graphToken: string) => void;
   onOffline: () => void;
+  onManual: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }
@@ -13,6 +14,7 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLogin,
   onOffline,
+  onManual,
   theme,
   onToggleTheme,
 }) => {
@@ -50,14 +52,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <span className="font-semibold text-lg text-neutral-800 dark:text-neutral-200">
               Migration Assistant
             </span>
-            <button
-              onClick={onOffline}
-              className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 shadow-sm"
-              aria-label="Use Offline Mode"
-            >
-              <WifiOffIcon className="w-3.5 h-3.5" />
-              Offline Mode
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onManual}
+                className="bg-neutral-700 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 shadow-sm"
+                aria-label="Use Manual Mode"
+              >
+                <ShieldCheckIcon className="w-3.5 h-3.5" />
+                Manual Mode
+              </button>
+              <button
+                onClick={onOffline}
+                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 shadow-sm"
+                aria-label="Use Offline Mode"
+              >
+                <WifiOffIcon className="w-3.5 h-3.5" />
+                Offline Mode
+              </button>
+            </div>
           </div>
           <h2 className="text-2xl font-semibold text-neutral-900 dark:text-white mt-2">
             Connect to Azure

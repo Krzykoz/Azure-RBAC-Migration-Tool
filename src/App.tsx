@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { LoginScreen } from './components/LoginScreen';
 import { Dashboard } from './components/Dashboard';
 import { OfflineInputPage } from './components/OfflineInputPage';
+import { ManualModePage } from './components/ManualModePage';
 import { getUserNameFromToken, getTenantIdFromToken } from './utils/tokenUtils';
 import { getTenants } from './services/azureService';
 import { KeyVault, RoleDefinition } from './types';
@@ -17,6 +18,9 @@ function App() {
   // Offline Mode State
   const [isOfflineInput, setIsOfflineInput] = useState(false);
   const [offlineData, setOfflineData] = useState<{ vaults: KeyVault[], roles: RoleDefinition[] } | null>(null);
+
+  // Manual / Interactive Mode State
+  const [isManualInput, setIsManualInput] = useState(false);
 
   useEffect(() => {
     // Check for saved theme or system preference
@@ -66,6 +70,7 @@ function App() {
     setArmToken(newArmToken);
     setGraphToken(newGraphToken);
     setIsOfflineInput(false);
+    setIsManualInput(false);
     setOfflineData(null);
   };
 
@@ -74,6 +79,7 @@ function App() {
     setGraphToken(null);
     setOrganizationName(null);
     setIsOfflineInput(false);
+    setIsManualInput(false);
     setOfflineData(null);
   };
 
@@ -106,11 +112,22 @@ function App() {
       );
     }
 
-    // 3. Login Screen
+    // 3. Manual / Interactive Mode
+    if (isManualInput) {
+      return (
+        <ManualModePage
+          onBack={() => setIsManualInput(false)}
+          theme={theme}
+        />
+      );
+    }
+
+    // 4. Login Screen
     return (
       <LoginScreen
         onLogin={handleLogin}
         onOffline={() => setIsOfflineInput(true)}
+        onManual={() => setIsManualInput(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
       />

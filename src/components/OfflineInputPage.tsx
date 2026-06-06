@@ -4,6 +4,7 @@ import {
     parseKeyVaultResponse,
     KeyVaultResponse,
 } from '../services/azureResponseParser';
+import { normalizeRoleDefinitions } from '../utils/roleNormalization';
 import { ArrowLeftIcon, CheckCircleIcon } from './Icons';
 import { CopyableCommand } from './ui';
 
@@ -71,43 +72,17 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
             }
 
             // Handle different input formats for roles
-            let roleListRaw: any[] = [];
-            if (Array.isArray(parsedRolesRaw)) {
-                roleListRaw = parsedRolesRaw;
-            } else if (parsedRolesRaw.value && Array.isArray(parsedRolesRaw.value)) {
-                roleListRaw = parsedRolesRaw.value;
-            } else if (
-                parsedRolesRaw.roleName ||
-                (parsedRolesRaw.properties && parsedRolesRaw.id)
-            ) {
-                roleListRaw = [parsedRolesRaw];
-            }
-
             if (!vaultList || vaultList.length === 0) {
                 throw new Error(
                     'No valid Key Vault data found. Ensure it is an Access Policy, List of Policies, or Key Vault object(s).'
                 );
             }
-            if (!roleListRaw || roleListRaw.length === 0) {
+
+            // Normalize roles (handles CLI flat format, ARM nested format, and envelopes)
+            const roleList = normalizeRoleDefinitions(parsedRolesRaw);
+            if (roleList.length === 0) {
                 throw new Error('No valid Role Definitions found in JSON.');
             }
-
-            // Normalize roles (handle both CLI flat format and ARM nested format)
-            const roleList: RoleDefinition[] = roleListRaw.map((r: any) => {
-                if (r.properties) return r as RoleDefinition;
-                return {
-                    id: r.id,
-                    name: r.name,
-                    type: r.type,
-                    properties: {
-                        roleName: r.roleName,
-                        description: r.description,
-                        type: r.roleType,
-                        permissions: r.permissions,
-                        assignableScopes: r.assignableScopes,
-                    },
-                } as RoleDefinition;
-            });
 
             const vaults = vaultList.map((v) => parseKeyVaultResponse(v, {}));
             onStart(vaults, roleList);
