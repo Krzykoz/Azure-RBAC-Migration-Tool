@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MigrationStatus, KeyVault, RoleDefinition } from '../types';
 import { useAzureData, useAnalysis, useExport, ExportFormat } from '../hooks';
 import { ArrowRightIcon, LoaderIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from './Icons';
 import { SidePanel } from './SidePanel';
 import { AnalysisResults } from './AnalysisResults';
+import { getPolicyKey } from '../utils/policyKey';
 
 interface DashboardProps {
   armToken: string;
@@ -77,19 +78,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [results, offlineData, resolveIdentities]);
 
   // Update export selection when resolved names change
+  const autoAddedExportKeys = useRef<Set<string>>(new Set());
+
+  // Reset auto-add tracking whenever a new analysis run produces fresh results.
   useEffect(() => {
-    if (results.length > 0 && Object.keys(resolvedNames).length > 0) {
-      const exportIds = new Set<string>();
-      results.forEach((r) => {
-        const resolvedType = resolvedNames[r.originalPolicy.objectId]?.type;
-        const policyType = r.originalPolicy.type;
-        const type = resolvedType || policyType || 'Unknown';
-        if (type !== 'Unknown') {
-          exportIds.add(r.originalPolicy.objectId);
-        }
-      });
-      setSelectedForExport(exportIds);
-    }
+    autoAddedExportKeys.current = new Set();
+  }, [results]);
+
+  // When identity names/types resolve, auto-include identities that transition from Unknown to a
+  // known type — but only once each, so the user's manual export de-selections are preserved.
+  useEffect(() => {
+    if (results.length === 0) return;
+
+    const newlyKnown: string[] = [];
+    results.forEach((r) => {
+      const key = getPolicyKey(r.originalPolicy);
+      const resolvedType = resolvedNames[r.originalPolicy.objectId]?.type;
+      const type = resolvedType || r.originalPolicy.type || 'Unknown';
+      if (type !== 'Unknown' && !autoAddedExportKeys.current.has(key)) {
+        newlyKnown.push(key);
+      }
+    });
+
+    if (newlyKnown.length === 0) return;
+
+    newlyKnown.forEach((key) => autoAddedExportKeys.current.add(key));
+    setSelectedForExport((prev) => {
+      const next = new Set(prev);
+      newlyKnown.forEach((key) => next.add(key));
+      return next;
+    });
   }, [resolvedNames, results, setSelectedForExport]);
 
   const handleAnalyze = async () => {

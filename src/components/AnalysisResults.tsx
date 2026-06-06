@@ -4,6 +4,7 @@ import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCirc
 import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { Checkbox } from './ui';
+import { getPolicyKey } from '../utils/policyKey';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Custom Shape to handle Centering + Animation
@@ -170,7 +171,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         ];
 
         return sortedResults.map(r => {
-            const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
+            const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
             const rec = r.recommendations[selectedIdx];
             const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
             // For compound identities, show "SP Name on behalf of (App Name)"
@@ -291,20 +292,20 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     };
 
     // Selection helpers
-    const toggleItemSelection = (objectId: string) => {
+    const toggleItemSelection = (policyKey: string) => {
         setSelectedForExport(prev => {
             const next = new Set(prev);
-            if (next.has(objectId)) {
-                next.delete(objectId);
+            if (next.has(policyKey)) {
+                next.delete(policyKey);
             } else {
-                next.add(objectId);
+                next.add(policyKey);
             }
             return next;
         });
     };
 
     const toggleCategorySelection = (groupData: MigrationAnalysis[]) => {
-        const ids = groupData.map(r => r.originalPolicy.objectId);
+        const ids = groupData.map(r => getPolicyKey(r.originalPolicy));
         const allSelected = ids.every(id => selectedForExport.has(id));
 
         setSelectedForExport(prev => {
@@ -319,7 +320,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     };
 
     const toggleAllSelection = () => {
-        const allIds = results.map(r => r.originalPolicy.objectId);
+        const allIds = results.map(r => getPolicyKey(r.originalPolicy));
         const allSelected = allIds.every(id => selectedForExport.has(id));
 
         setSelectedForExport(prev => {
@@ -332,7 +333,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     };
 
     const getAllSelectionState = (): 'all' | 'some' | 'none' => {
-        const allIds = results.map(r => r.originalPolicy.objectId);
+        const allIds = results.map(r => getPolicyKey(r.originalPolicy));
         const selectedCount = allIds.filter(id => selectedForExport.has(id)).length;
         if (selectedCount === 0) return 'none';
         if (selectedCount === allIds.length) return 'all';
@@ -340,7 +341,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     };
 
     const getCategorySelectionState = (groupData: MigrationAnalysis[]): 'all' | 'some' | 'none' => {
-        const ids = groupData.map(r => r.originalPolicy.objectId);
+        const ids = groupData.map(r => getPolicyKey(r.originalPolicy));
         const selectedCount = ids.filter(id => selectedForExport.has(id)).length;
         if (selectedCount === 0) return 'none';
         if (selectedCount === ids.length) return 'all';
@@ -364,7 +365,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                 </div>
                 <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
                     {groupData.map((res, idx) => {
-                        const selectedRoleIdx = selectedRoles[res.originalPolicy.objectId] || 0;
+                        const policyKey = getPolicyKey(res.originalPolicy);
+                        const selectedRoleIdx = selectedRoles[policyKey] || 0;
                         const activeRec = res.recommendations[selectedRoleIdx];
 
                         const resolvedInfo = resolvedNames[res.originalPolicy.objectId];
@@ -380,20 +382,20 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         const currentType = resolvedInfo?.type || res.originalPolicy.type;
                         const isKnown = !!displayName;
                         const isFullyCovered = res.existingCoverage?.isFullyCovered;
-                        const showRecs = !isFullyCovered || showSuggestions[res.originalPolicy.objectId];
-                        const showDetails = showCoverageDetails[res.originalPolicy.objectId];
+                        const showRecs = !isFullyCovered || showSuggestions[policyKey];
+                        const showDetails = showCoverageDetails[policyKey];
 
-                        const isSelected = selectedForExport.has(res.originalPolicy.objectId);
+                        const isSelected = selectedForExport.has(policyKey);
 
                         return (
-                            <div key={res.originalPolicy.objectId} className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
+                            <div key={policyKey} className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
                                 <div className="grid grid-cols-12 gap-4 px-6 py-4 items-start">
                                     {/* Identity Column */}
                                     <div className="col-span-3 pr-2">
                                         <div className="flex items-start gap-4">
                                             <Checkbox
                                                 checked={isSelected}
-                                                onChange={() => toggleItemSelection(res.originalPolicy.objectId)}
+                                                onChange={() => toggleItemSelection(policyKey)}
                                                 className="mt-1"
                                             />
                                             <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 ${isKnown ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
@@ -451,14 +453,14 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
 
                                                 {/* Original Policy View Toggle */}
                                                 <button
-                                                    onClick={() => togglePolicyDetails(res.originalPolicy.objectId)}
+                                                    onClick={() => togglePolicyDetails(policyKey)}
                                                     className="mt-2 block text-[10px] font-medium text-brand-600 dark:text-brand-400 hover:underline focus:outline-none"
                                                 >
-                                                    {showPolicyDetails[res.originalPolicy.objectId] ? 'Hide Legacy Policy' : 'View Legacy Policy'}
+                                                    {showPolicyDetails[policyKey] ? 'Hide Legacy Policy' : 'View Legacy Policy'}
                                                 </button>
 
                                                 {/* Original Policy Details */}
-                                                {showPolicyDetails[res.originalPolicy.objectId] && (
+                                                {showPolicyDetails[policyKey] && (
                                                     <div className="mt-2 p-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded text-[10px]">
                                                         {Object.entries(res.originalPolicy.permissions).map(([category, perms]) => {
                                                             if (!perms || perms.length === 0) return null;
@@ -490,7 +492,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                                 {res.recommendations.map((rec, recIdx) => (
                                                     <button
                                                         key={recIdx}
-                                                        onClick={() => setSelectedRoles(prev => ({ ...prev, [res.originalPolicy.objectId]: recIdx }))}
+                                                        onClick={() => setSelectedRoles(prev => ({ ...prev, [policyKey]: recIdx }))}
                                                         disabled={!showRecs}
                                                         className={`px-2 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wide border transition-all ${selectedRoleIdx === recIdx
                                                             ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-900/20 dark:border-brand-800 dark:text-brand-300'
@@ -538,10 +540,10 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                                             {res.existingCoverage && (
                                                 <CoverageBanner
                                                     existingCoverage={res.existingCoverage}
-                                                    objectId={res.originalPolicy.objectId}
+                                                    objectId={policyKey}
                                                     showDetails={showDetails}
                                                     onToggleDetails={toggleCoverageDetails}
-                                                    showSuggestions={showSuggestions[res.originalPolicy.objectId]}
+                                                    showSuggestions={showSuggestions[policyKey]}
                                                     onToggleSuggestions={toggleSuggestion}
                                                 />
                                             )}

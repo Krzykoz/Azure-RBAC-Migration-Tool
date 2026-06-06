@@ -4,11 +4,11 @@ import {
     RoleDefinition,
     RoleAssignment,
     MigrationAnalysis,
-    MigrationStatus,
     IdentityType,
 } from '../types';
 import { analyzePolicies, analyzeExistingCoverage } from '../services/analysisService';
 import { STRATEGY_PRIORITY } from '../constants';
+import { getPolicyKey } from '../utils/policyKey';
 
 interface UseAnalysisProps {
     selectedVault: KeyVault | null;
@@ -101,7 +101,7 @@ export const useAnalysis = ({
                 // Set default strategy selections
                 const defaults: Record<string, number> = {};
                 enhancedAnalysis.forEach((a) => {
-                    defaults[a.originalPolicy.objectId] = findBestStrategyIndex(a.recommendations);
+                    defaults[getPolicyKey(a.originalPolicy)] = findBestStrategyIndex(a.recommendations);
                 });
                 setSelectedRoles(defaults);
 
@@ -112,7 +112,7 @@ export const useAnalysis = ({
                     const policyType = a.originalPolicy.type;
                     const type = resolvedType || policyType || 'Unknown';
                     if (type !== 'Unknown') {
-                        exportIds.add(a.originalPolicy.objectId);
+                        exportIds.add(getPolicyKey(a.originalPolicy));
                     }
                 });
                 setSelectedForExport(exportIds);

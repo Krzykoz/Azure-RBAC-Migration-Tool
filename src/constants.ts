@@ -63,7 +63,11 @@ export const ANALYSIS_STRATEGIES: readonly StrategyConfig[] = [
 
 // Analysis Constants
 export const ANALYSIS_CONSTANTS = {
-    MAX_COMBINATION_SIZE: 10,
+    // Max number of roles the search may combine for a single identity.
+    // Key Vault has 4 data-plane categories (keys/secrets/certificates/storage), so 4 is
+    // enough to cover any policy even with single-category roles, while keeping the exhaustive
+    // subset search bounded (the score also penalizes role count, so larger combos are never optimal).
+    MAX_COMBINATION_SIZE: 4,
     GRAPH_BATCH_SIZE: 20,
     VAULT_CONCURRENCY_LIMIT: 5,
 } as const;

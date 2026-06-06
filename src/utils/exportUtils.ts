@@ -1,4 +1,30 @@
 import { MigrationAnalysis, IdentityType } from '../types';
+import { getPolicyKey } from './policyKey';
+
+
+// Escape a value for safe inclusion in a CSV cell.
+// - Doubles embedded quotes (RFC 4180) so names containing `"` don't corrupt the row.
+// - Neutralizes spreadsheet formula injection by prefixing values that begin with =, +, -, @, tab or CR.
+const csvCell = (value: string | number): string => {
+    let s = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) {
+        s = `'${s}`;
+    }
+    return `"${s.replace(/"/g, '""')}"`;
+};
+
+// Escape a value for a PowerShell double-quoted string literal.
+// Backtick is the PS escape char, and `"` / `$` are special inside double quotes; newlines are flattened.
+const psEscape = (value: string | number): string =>
+    String(value ?? '')
+        .replace(/`/g, '``')
+        .replace(/"/g, '`"')
+        .replace(/\$/g, '`$')
+        .replace(/[\r\n]+/g, ' ');
+
+// Flatten a value for use in a single-line PowerShell comment.
+const psComment = (value: string | number): string =>
+    String(value ?? '').replace(/[\r\n]+/g, ' ');
 
 
 export const exportToCSV = (
@@ -9,7 +35,7 @@ export const exportToCSV = (
     const headers = ['Identity Name', 'Object ID', 'Type', 'Strategy', 'Recommended Role', 'Confidence', 'Missing Permissions', 'Excess Permissions'];
 
     const rows = results.map(r => {
-        const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
+        const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
         const rec = r.recommendations[selectedIdx];
         const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
         // For compound identities, show "SP Name on behalf of (App Name)"
@@ -37,7 +63,7 @@ export const exportToCSV = (
 
     const csvContent = [
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ...rows.map(row => row.map(csvCell).join(','))
     ].join('\n');
 
     return csvContent;
@@ -50,7 +76,7 @@ export const exportToJSON = (
     resolvedNames: Record<string, { name: string, type: IdentityType }>
 ): string => {
     const exportData = results.map(r => {
-        const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
+        const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
         const rec = r.recommendations[selectedIdx];
         const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
         // For compound identities, include resolved app info
@@ -99,15 +125,15 @@ export const exportToPowerShell = (
 ): string => {
     const script = [`# Azure Key Vault RBAC Migration Script
 # Generated: ${new Date().toISOString()}
-# Vault: ${vaultName}
-# Subscription: ${subscriptionId}
+# Vault: ${psComment(vaultName)}
+# Subscription: ${psComment(subscriptionId)}
 
 # WARNING: Review this script carefully before running!
 # This script will create role assignments for the Key Vault.
 
-$vaultName = "${vaultName}"
-$subscriptionId = "${subscriptionId}"
-$scope = "${vaultResourceId || ''}"
+$vaultName = "${psEscape(vaultName)}"
+$subscriptionId = "${psEscape(subscriptionId)}"
+$scope = "${psEscape(vaultResourceId || '')}"
 
 # Get the Key Vault resource
 $vault = Get-AzKeyVault -VaultName $vaultName
@@ -148,7 +174,7 @@ Write-Host ""
 
     // Helper function to generate script for an identity
     const generateIdentityScript = (r: MigrationAnalysis) => {
-        const selectedIdx = selectedRoles[r.originalPolicy.objectId] || 0;
+        const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
         const rec = r.recommendations[selectedIdx];
         const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
         // For compound identities, show "SP Name on behalf of (App Name)"
@@ -160,14 +186,14 @@ Write-Host ""
             displayName = `${displayName} on behalf of (${appName})`;
         }
 
-        script.push(`# ${displayName} (${r.originalPolicy.objectId})`);
-        script.push(`# Strategy: ${rec.strategy} | Confidence: ${rec.confidence}%`);
+        script.push(`# ${psComment(displayName)} (${psComment(r.originalPolicy.objectId)})`);
+        script.push(`# Strategy: ${psComment(rec.strategy)} | Confidence: ${rec.confidence}%`);
 
         if (rec.roleNames && rec.roleNames.length > 0) {
             rec.roleNames.forEach(roleName => {
                 script.push(`New-AzRoleAssignment \``);
-                script.push(`  -ObjectId "${r.originalPolicy.objectId}" \``);
-                script.push(`  -RoleDefinitionName "${roleName}" \``);
+                script.push(`  -ObjectId "${psEscape(r.originalPolicy.objectId)}" \``);
+                script.push(`  -RoleDefinitionName "${psEscape(roleName)}" \``);
                 script.push(`  -Scope $scope`);
             });
         } else {
@@ -177,7 +203,7 @@ Write-Host ""
         if (rec.missingPermissions.length > 0) {
             script.push(`# WARNING: ${rec.missingPermissions.length} permissions will NOT be covered:`);
             rec.missingPermissions.forEach(perm => {
-                script.push(`#   - ${perm}`);
+                script.push(`#   - ${psComment(perm)}`);
             });
         }
 
@@ -199,9 +225,9 @@ Write-Host ""
             rec.excessPermissions.forEach(perm => {
                 const roles = permissionToRoles[perm];
                 if (roles && roles.length > 0) {
-                    script.push(`#   - ${perm} (added by: ${roles.join(', ')})`);
+                    script.push(`#   - ${psComment(perm)} (added by: ${psComment(roles.join(', '))})`);
                 } else {
-                    script.push(`#   - ${perm}`);
+                    script.push(`#   - ${psComment(perm)}`);
                 }
             });
         }
