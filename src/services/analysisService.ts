@@ -66,6 +66,13 @@ Object.values(PERMISSION_MAP).forEach(catMap => {
   });
 });
 
+// Lowercased companion set used for case-insensitive membership checks.
+// Azure data actions are mixed-case (e.g. "Microsoft.KeyVault/vaults/keys/read"),
+// so comparisons against a lowercased input must use this set, not ALL_KNOWN_RBAC_ACTIONS.
+const ALL_KNOWN_RBAC_ACTIONS_LOWER = new Set<string>(
+  Array.from(ALL_KNOWN_RBAC_ACTIONS, a => a.toLowerCase())
+);
+
 function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -201,8 +208,10 @@ export const analyzeExistingCoverage = (
     const scope = (a.properties.scope || '').toLowerCase();
     const target = scopeFilter.toLowerCase();
 
-    // Accept exact match or child scopes under the vault
-    return scope === target || scope.startsWith(target + '/');
+    // RBAC inherits downward: an assignment applies to the vault if it is scoped to the
+    // vault itself OR to any ancestor (subscription / resource group). Assignments scoped to
+    // a child resource (a single secret/key) must NOT be treated as vault-wide coverage.
+    return scope === target || target.startsWith(scope + '/');
   });
 
   const covered = new Set<string>();
@@ -265,12 +274,24 @@ export function runWeightedAnalysis(
   let bestCovered = new Set<string>();
   let bestExcess = new Set<string>();
 
+  // Precompute coverage for each role exactly once. Combination search reuses these
+  // cached sets instead of recomputing calculateCoverage for every role in every subset.
+  const coverageCache = new Map<RoleDefinition, { covered: Set<string>; excess: Set<string> }>();
+  const getCoverage = (role: RoleDefinition) => {
+    let entry = coverageCache.get(role);
+    if (!entry) {
+      entry = calculateCoverage(required, role);
+      coverageCache.set(role, entry);
+    }
+    return entry;
+  };
+
   const evaluateCombination = (combo: RoleDefinition[]) => {
     const combinedCovered = new Set<string>();
     const combinedExcess = new Set<string>();
 
     combo.forEach((role) => {
-      const { covered, excess } = calculateCoverage(required, role);
+      const { covered, excess } = getCoverage(role);
       covered.forEach((c) => combinedCovered.add(c));
       excess.forEach((e) => combinedExcess.add(e));
     });
@@ -290,10 +311,7 @@ export function runWeightedAnalysis(
   };
 
   // Filter to roles that cover at least one required permission
-  const usefulRoles = roles.filter((r) => {
-    const { covered } = calculateCoverage(required, r);
-    return covered.size > 0;
-  });
+  const usefulRoles = roles.filter((r) => getCoverage(r).covered.size > 0);
 
   const generateCombinations = (startIdx: number, currentCombo: RoleDefinition[]) => {
     if (currentCombo.length > 0) {
@@ -330,7 +348,7 @@ export function runWeightedAnalysis(
 
 
   const roleBreakdown: RoleBreakdown[] = bestCombination.map(role => {
-    const { covered, excess } = calculateCoverage(required, role);
+    const { covered, excess } = getCoverage(role);
     return {
       roleName: role.properties.roleName,
       covered: Array.from(covered),
@@ -358,37 +376,49 @@ function calculateCoverage(required: Set<string>, role: RoleDefinition): { cover
   const covered = new Set<string>();
   const excess = new Set<string>();
 
+  // Collect this role's Key Vault data actions and its exclusions (notDataActions).
+  const dataActions: string[] = [];
+  const notDataActions: string[] = [];
   role.properties.permissions.forEach(p => {
-    p.dataActions.forEach(da => {
-      if (!da.toLowerCase().includes('microsoft.keyvault')) return;
+    (p.dataActions || []).forEach(da => {
+      if (da.toLowerCase().includes('microsoft.keyvault')) dataActions.push(da);
+    });
+    (p.notDataActions || []).forEach(na => notDataActions.push(na));
+  });
 
-      const isWildcard = da.includes('*');
+  // An action is excluded if any notDataAction matches it (notDataActions may be wildcards).
+  const isExcluded = (action: string): boolean =>
+    notDataActions.some(na => actionMatches(na, action));
 
-      if (isWildcard) {
-        // Expand wildcard against known universe
-        ALL_KNOWN_RBAC_ACTIONS.forEach(knownAction => {
-          if (actionMatches(da, knownAction)) {
-            if (required.has(knownAction)) {
-              covered.add(knownAction);
-            } else {
-              excess.add(knownAction);
-            }
-          }
-        });
-      } else {
+  dataActions.forEach(da => {
+    const isWildcard = da.includes('*');
 
-        const matchesReq = Array.from(required).find(req => req.toLowerCase() === da.toLowerCase());
-
-        if (matchesReq) {
-          covered.add(matchesReq);
-        } else {
-          // Only count as excess if it's a recognized data action (ignore random strings)
-          if (ALL_KNOWN_RBAC_ACTIONS.has(da.toLowerCase()) || da.toLowerCase().endsWith('/action')) {
-            excess.add(da);
+    if (isWildcard) {
+      // Expand wildcard against known universe, minus anything the role explicitly excludes.
+      ALL_KNOWN_RBAC_ACTIONS.forEach(knownAction => {
+        if (actionMatches(da, knownAction) && !isExcluded(knownAction)) {
+          if (required.has(knownAction)) {
+            covered.add(knownAction);
+          } else {
+            excess.add(knownAction);
           }
         }
+      });
+    } else {
+      if (isExcluded(da)) return;
+
+      const matchesReq = Array.from(required).find(req => req.toLowerCase() === da.toLowerCase());
+
+      if (matchesReq) {
+        covered.add(matchesReq);
+      } else {
+        // Only count as excess if it's a recognized data action (ignore random strings).
+        // Compare against the lowercased set since Azure actions are mixed-case.
+        if (ALL_KNOWN_RBAC_ACTIONS_LOWER.has(da.toLowerCase()) || da.toLowerCase().endsWith('/action')) {
+          excess.add(da);
+        }
       }
-    });
+    }
   });
 
   return { covered, excess };

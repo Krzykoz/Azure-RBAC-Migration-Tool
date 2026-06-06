@@ -5,7 +5,6 @@ import {
   TenantResponse,
   RoleDefinitionResponse,
   RoleAssignmentResponse,
-  RoleAssignmentListResponse,
   GraphResponse,
   parseKeyVaultResponse,
   parseSubscriptions,
@@ -49,6 +48,28 @@ const azureFetch = async <T>(url: string, token: string): Promise<T> => {
   }
 };
 
+interface PagedListResponse<TItem> {
+  value?: TItem[];
+  nextLink?: string;
+}
+
+// ARM list endpoints return at most one page of results plus an absolute `nextLink` URL.
+// This helper follows nextLink until exhausted so large subscriptions are not silently truncated.
+const azureFetchAllPages = async <TItem>(url: string, token: string): Promise<TItem[]> => {
+  const items: TItem[] = [];
+  let nextUrl: string | undefined = url;
+
+  while (nextUrl) {
+    const page: PagedListResponse<TItem> = await azureFetch<PagedListResponse<TItem>>(nextUrl, token);
+    if (page.value && page.value.length > 0) {
+      items.push(...page.value);
+    }
+    nextUrl = page.nextLink;
+  }
+
+  return items;
+};
+
 export const validateToken = async (token: string): Promise<void> => {
   try {
     await azureFetch(`${ARM}/subscriptions?api-version=${API.SUBSCRIPTIONS}`, token);
@@ -75,15 +96,15 @@ export const validateToken = async (token: string): Promise<void> => {
 
 export const getSubscriptions = async (token: string): Promise<Subscription[]> => {
   const url = `${ARM}/subscriptions?api-version=${API.SUBSCRIPTIONS}`;
-  const data = await azureFetch<SubscriptionResponse>(url, token);
-  return parseSubscriptions(data);
+  const value = await azureFetchAllPages<SubscriptionResponse['value'][number]>(url, token);
+  return parseSubscriptions({ value });
 };
 
 export const getTenants = async (token: string): Promise<Record<string, string>> => {
   try {
     const url = `${ARM}/tenants?api-version=${API.SUBSCRIPTIONS}`;
-    const data = await azureFetch<TenantResponse>(url, token);
-    return parseTenants(data);
+    const value = await azureFetchAllPages<TenantResponse['value'][number]>(url, token);
+    return parseTenants({ value });
   } catch (e) {
     console.error('Failed to fetch tenants', e);
     return {};
@@ -97,8 +118,8 @@ export const getRoleDefinitions = async (
   const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const data = await azureFetch<RoleDefinitionResponse>(url, token);
-    const roles = parseRoleDefinitions(data);
+    const value = await azureFetchAllPages<RoleDefinitionResponse['value'][number]>(url, token);
+    const roles = parseRoleDefinitions({ value });
 
     // Filter to Key Vault related roles
     return roles.filter((role) => {
@@ -121,8 +142,8 @@ const getPrincipalTypesCache = async (
   const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const data = await azureFetch<RoleAssignmentResponse>(url, token);
-    return parsePrincipalTypes(data);
+    const value = await azureFetchAllPages<RoleAssignmentResponse['value'][number]>(url, token);
+    return parsePrincipalTypes({ value });
   } catch (e) {
     console.warn('Failed to fetch role assignments for type resolution.', e);
     return {};
@@ -136,8 +157,8 @@ export const getRoleAssignments = async (
   const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const data = await azureFetch<RoleAssignmentListResponse>(url, token);
-    return parseRoleAssignments(data);
+    const value = await azureFetchAllPages<RoleAssignment>(url, token);
+    return parseRoleAssignments({ value });
   } catch (e) {
     console.error('Failed to fetch role assignments', e);
     return [];
@@ -191,30 +212,26 @@ export const resolveBatchIdentities = async (
   return results;
 };
 
-interface KeyVaultListResponse {
-  value: Array<{ id: string }>;
-}
-
 export const getKeyVaults = async (
   token: string,
   subscriptionId: string
 ): Promise<KeyVault[]> => {
   const listUrl = `${ARM}/subscriptions/${subscriptionId}/resources?$filter=resourceType eq 'Microsoft.KeyVault/vaults'&api-version=${API.RESOURCES}`;
 
-  const [listData, principalTypeCache] = await Promise.all([
-    azureFetch<KeyVaultListResponse>(listUrl, token),
+  const [listValue, principalTypeCache] = await Promise.all([
+    azureFetchAllPages<{ id: string }>(listUrl, token),
     getPrincipalTypesCache(token, subscriptionId),
   ]);
 
-  if (!listData.value || listData.value.length === 0) {
+  if (!listValue || listValue.length === 0) {
     return [];
   }
 
   const concurrencyLimit = ANALYSIS_CONSTANTS.VAULT_CONCURRENCY_LIMIT;
   const results: KeyVault[] = [];
 
-  for (let i = 0; i < listData.value.length; i += concurrencyLimit) {
-    const chunk = listData.value.slice(i, i + concurrencyLimit);
+  for (let i = 0; i < listValue.length; i += concurrencyLimit) {
+    const chunk = listValue.slice(i, i + concurrencyLimit);
 
     const chunkPromises = chunk.map(async (resource) => {
       try {

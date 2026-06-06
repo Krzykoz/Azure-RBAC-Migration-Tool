@@ -28,9 +28,11 @@ export const PermissionVisualizer: React.FC<PermissionVisualizerProps> = ({ brea
         // Remove the common prefix
         let label = p.replace(/Microsoft\.KeyVault\/vaults\//i, '');
 
-        // Remove action suffix (e.g. /action, /read, /write) to keep it clean
+        // Remove action suffix (e.g. /action) and annotate verb suffixes to keep it clean
         label = label.replace(/\/action$/i, '');
         label = label.replace(/\/read$/i, ' (read)');
+        label = label.replace(/\/write$/i, ' (write)');
+        label = label.replace(/\/delete$/i, ' (delete)');
 
         // Fallback if the replace didn't change much (e.g. custom provider actions), try to simplify
         if (label.length > 40) {

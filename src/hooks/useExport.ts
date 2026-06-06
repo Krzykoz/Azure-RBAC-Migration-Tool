@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
 import { exportToCSV, exportToJSON, exportToPowerShell, downloadFile } from '../utils/exportUtils';
+import { getPolicyKey } from '../utils/policyKey';
 
 export type ExportFormat = 'csv' | 'json' | 'powershell';
 
@@ -38,7 +39,7 @@ export const useExport = ({
         (format: ExportFormat): boolean => {
             // Filter results by selection
             const filteredResults = results.filter((r) =>
-                selectedForExport.has(r.originalPolicy.objectId)
+                selectedForExport.has(getPolicyKey(r.originalPolicy))
             );
 
             if (filteredResults.length === 0) {
