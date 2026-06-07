@@ -21,7 +21,9 @@ const parsePermissionMap = (csvContent: string): PermissionMap => {
     storage: {}
   };
 
-  const lines = csvContent.trim().split('\n');
+  // Split on CRLF or LF and drop blank lines so a CRLF-saved CSV does not leave a
+  // trailing carriage return on the last RBAC action of each row.
+  const lines = csvContent.split(/\r?\n/).filter(line => line.trim() !== '');
 
   const dataLines = lines.slice(1);
 
@@ -84,7 +86,9 @@ const actionMatches = (roleAction: string, requiredAction: string): boolean => {
 
   if (r === '*' || r === req) return true;
   if (r.endsWith('/*')) {
-    const prefix = r.slice(0, -2);
+    // Keep the trailing slash so "secrets/*" matches children (".../secrets/<x>")
+    // but not siblings that merely share the prefix (".../secretsBackup/<x>").
+    const prefix = r.slice(0, -1);
     return req.startsWith(prefix);
   }
   // Handle specific wildcards like "Microsoft.KeyVault/vaults/secrets/*/action" if they exist
@@ -209,9 +213,11 @@ export const analyzeExistingCoverage = (
     const target = scopeFilter.toLowerCase();
 
     // RBAC inherits downward: an assignment applies to the vault if it is scoped to the
-    // vault itself OR to any ancestor (subscription / resource group). Assignments scoped to
-    // a child resource (a single secret/key) must NOT be treated as vault-wide coverage.
-    return scope === target || target.startsWith(scope + '/');
+    // vault itself OR to any ancestor (root / subscription / resource group). Assignments
+    // scoped to a child resource (a single secret/key) must NOT be treated as vault-wide.
+    if (scope === target) return true;
+    if (scope === '/') return true; // root scope covers every resource
+    return target.startsWith(scope + '/');
   });
 
   const covered = new Set<string>();
@@ -363,7 +369,7 @@ export function runWeightedAnalysis(
     strategy: config.name,
     roleName: roleNames.join(' + '),
     roleNames: roleNames,
-    confidence: calculateConfidence(required.size, bestCovered.size, bestExcess.size),
+    confidence: calculateConfidence(required.size, bestCovered.size),
     reasoning: config.description,
     coveredPermissions: Array.from(bestCovered),
     missingPermissions: missing,
@@ -424,9 +430,11 @@ function calculateCoverage(required: Set<string>, role: RoleDefinition): { cover
   return { covered, excess };
 }
 
-function calculateConfidence(totalNeeded: number, covered: number, excessCount: number): number {
+function calculateConfidence(totalNeeded: number, covered: number): number {
   if (totalNeeded === 0) return 100;
 
+  // Confidence reflects coverage only (how much of the policy the role set satisfies).
+  // Excess permissions are reported separately so the user can review over-grants.
   const coverageRatio = covered / totalNeeded; // 0 to 1
   return Math.max(0, Math.min(100, Math.round(coverageRatio * 100)));
 }

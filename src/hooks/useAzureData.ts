@@ -57,6 +57,8 @@ export const useAzureData = ({
 
     // Load subscriptions
     useEffect(() => {
+        let active = true;
+
         const loadSubscriptions = async () => {
             if (offlineData) {
                 setSubscriptions([
@@ -72,21 +74,27 @@ export const useAzureData = ({
 
             try {
                 const subs = await getSubscriptions(armToken);
+                if (!active) return;
                 setSubscriptions(subs);
                 setStatus(MigrationStatus.IDLE);
             } catch (error) {
+                if (!active) return;
                 console.error('Failed to load subscriptions:', error);
                 setStatus(MigrationStatus.ERROR);
             }
         };
 
         loadSubscriptions();
+        return () => {
+            active = false;
+        };
     }, [armToken, offlineData]);
 
     // Load vaults, roles, and assignments when subscription changes
     useEffect(() => {
         if (!selectedSub) return;
 
+        let active = true;
         setStatus(MigrationStatus.LOADING);
 
         if (offlineData) {
@@ -101,12 +109,15 @@ export const useAzureData = ({
                 getRoleAssignments(armToken, selectedSub.subscriptionId),
             ])
                 .then(([fetchedVaults, fetchedRoles, fetchedAssignments]) => {
+                    // Ignore results from a superseded subscription selection.
+                    if (!active) return;
                     setVaults(fetchedVaults);
                     setAvailableRoles(fetchedRoles);
                     setRoleAssignments(fetchedAssignments);
                     setStatus(MigrationStatus.IDLE);
                 })
                 .catch((error) => {
+                    if (!active) return;
                     console.error('Failed to load Azure data:', error);
                     setStatus(MigrationStatus.ERROR);
                 });
@@ -115,18 +126,23 @@ export const useAzureData = ({
         // Reset downstream state
         setSelectedVault(null);
         setResolvedNames({});
+
+        return () => {
+            active = false;
+        };
     }, [selectedSub, armToken, offlineData]);
 
     // Resolve identities
     const resolveIdentities = useCallback(
         async (objectIds: string[]) => {
-            if (offlineData || objectIds.length === 0) return;
+            // Identity resolution requires a Graph-scoped token. Without one, the call would
+            // always 401 against the Management token, so skip it instead of logging noise.
+            if (offlineData || objectIds.length === 0 || !graphToken) return;
 
-            const token = graphToken || armToken;
-            const resolved = await resolveBatchIdentities(objectIds, token);
+            const resolved = await resolveBatchIdentities(objectIds, graphToken);
             setResolvedNames((prev) => ({ ...prev, ...resolved }));
         },
-        [graphToken, armToken, offlineData]
+        [graphToken, offlineData]
     );
 
     return {

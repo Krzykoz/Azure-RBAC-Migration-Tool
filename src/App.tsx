@@ -37,12 +37,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     const fetchOrgName = async () => {
       if (armToken) {
         const tid = getTenantIdFromToken(armToken);
         if (tid) {
           const tenants = await getTenants(armToken);
-          if (tenants[tid]) {
+          if (active && tenants[tid]) {
             setOrganizationName(tenants[tid]);
           }
         }
@@ -51,6 +52,9 @@ function App() {
       }
     };
     fetchOrgName();
+    return () => {
+      active = false;
+    };
   }, [armToken]);
 
   const toggleTheme = () => {
