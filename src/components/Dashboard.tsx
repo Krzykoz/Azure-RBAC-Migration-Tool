@@ -68,6 +68,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
     vaultResourceId: selectedVault?.id || '',
   });
 
+  // Close the export dropdown when clicking outside of it.
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        exportMenuRef.current &&
+        event.target instanceof Node &&
+        !exportMenuRef.current.contains(event.target)
+      ) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExportMenu, setShowExportMenu]);
+
   // Resolve identities when results change
   useEffect(() => {
     if (results.length > 0 && !offlineData) {
@@ -210,14 +227,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Right Column: Workspace */}
         <div className="lg:col-span-9 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm min-h-[600px] flex flex-col">
           {/* Workspace Header */}
-          <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 flex justify-between items-center bg-neutral-50/30">
+          <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 flex justify-between items-center bg-neutral-50 dark:bg-neutral-800/50">
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
               {selectedVault ? `Analysis: ${selectedVault.name}` : 'Migration Workspace'}
             </h2>
             <div className="flex items-center gap-2">
               {/* Export Menu */}
               {status === MigrationStatus.COMPLETE && (
-                <div className="relative">
+                <div className="relative" ref={exportMenuRef}>
                   <button
                     onClick={() => setShowExportMenu(!showExportMenu)}
                     className="px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center gap-2 transition-colors"

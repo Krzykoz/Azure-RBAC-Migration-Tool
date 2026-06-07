@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ user, organization, onLogout, th
       <div className="flex items-center gap-4">
         <span className="font-semibold text-base tracking-tight">Key Vault Migrator</span>
         <div className="h-4 w-px bg-neutral-600 mx-1"></div>
-        <h1 className="text-sm font-normal text-neutral-300 hover:text-white transition-colors cursor-pointer">
+        <h1 className="text-sm font-normal text-neutral-300">
           RBAC Assistant
         </h1>
       </div>
