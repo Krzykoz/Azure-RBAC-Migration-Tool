@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:3000` (Vite default).
+The app will be available at `http://localhost:3000` (configured in `vite.config.ts`).
 
 ## Build for Production
 
@@ -125,8 +125,10 @@ src/
 │   ├─ ui/                    # Shared primitives (Checkbox, CopyableCommand)
 │   └─ ErrorBoundary.tsx
 ├─ services/                 # Azure API wrappers
-│   ├─ azureService.ts
-│   └─ analysisService.ts
+│   ├─ azureService.ts        # ARM/Graph fetch helpers
+│   ├─ azureResponseParser.ts # Parses ARM/Graph responses into app types
+│   └─ analysisService.ts     # Role-mapping analysis engine
+├─ hooks/                    # React hooks (data fetching, analysis, export, clipboard)
 ├─ utils/                    # Helper utilities
 │   ├─ tokenUtils.ts          # JWT decode & username extraction
 │   ├─ exportUtils.ts         # CSV/JSON/PowerShell export
@@ -149,7 +151,7 @@ scripts/
 1. **Data fetching** – Retrieves subscriptions, vaults, role definitions, and access policies via Azure ARM APIs.
 2. **Mapping** – Loads `AcessPolicyRBACMapping.csv` to map legacy permissions to RBAC data actions.
 3. **Analysis** – Runs three greedy algorithms to propose optimal role sets.
-4. **Scoring** – Calculates confidence scores based on coverage and excess permissions.
+4. **Scoring** – Confidence reflects how much of the policy a role set covers; excess permissions are reported separately so you can review over-grants.
 5. **Presentation** – Visual breakdowns with charts, tooltips, and export options.
 
 ## Security

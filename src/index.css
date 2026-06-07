@@ -44,3 +44,36 @@
   --shadow-fluent-hover: 0 3.2px 7.2px 0 rgba(0, 0, 0, 0.132),
     0 0.6px 1.8px 0 rgba(0, 0, 0, 0.108);
 }
+
+/* Lightweight entrance animations referenced by components. Previously these
+   class names (`fade-in-up`, and the `animate-in` set on the copy icon) had no
+   definitions, so the elements never animated. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.3s ease-out both;
+}
+
+@keyframes icon-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.icon-pop {
+  animation: icon-pop 0.2s ease-out both;
+}

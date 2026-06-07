@@ -1,5 +1,5 @@
 import { Subscription, KeyVault, IdentityType, RoleAssignment, RoleDefinition } from '../types';
-import { KEY_VAULT_ALL_PERMISSIONS } from '../utils/permissionDefinitions';
+import { KEY_VAULT_ALL_PERMISSIONS, LEGACY_KEY_VAULT_PERMISSIONS } from '../utils/permissionDefinitions';
 
 export interface KeyVaultProperties {
     sku?: { name: string };
@@ -52,13 +52,13 @@ export const parseKeyVaultResponse = (
                 if (!perms) return;
 
                 // Helper to find standard casing if possible
+                const canonicalPerms = LEGACY_KEY_VAULT_PERMISSIONS[normalizedCategory] || [];
                 const getNiceCasing = (p: string) => {
-                    // Try to match against Key Vault All (Standard) or just keep as is
-                    // Note: We need a reference list of ALL valid permissions including Purge. 
-                    // Since we don't have the full LEGACY list imported here (only KEY_VAULT_ALL_PERMISSIONS),
-                    // we will just capitalize the first letter as a heuristic if we can't find a match.
-                    // Actually, we can just TitleCase it.
                     if (p.toLowerCase() === 'all') return 'All';
+                    // Prefer the canonical casing from the legacy catalog so multi-word
+                    // permissions (e.g. "ManageContacts") aren't flattened to "Managecontacts".
+                    const match = canonicalPerms.find(c => c.toLowerCase() === p.toLowerCase());
+                    if (match) return match;
                     return p.charAt(0).toUpperCase() + p.slice(1);
                 };
 
