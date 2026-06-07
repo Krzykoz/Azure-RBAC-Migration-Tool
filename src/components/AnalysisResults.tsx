@@ -354,7 +354,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
 
         return (
             <React.Fragment>
-                <div className="px-6 py-2 bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 font-semibold text-xs text-neutral-800 dark:text-neutral-300 uppercase tracking-wider sticky top-0 z-10 flex items-center gap-4">
+                <div className="px-6 py-2 bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 font-semibold text-xs text-neutral-800 dark:text-neutral-300 uppercase tracking-wider sticky top-12 z-10 flex items-center gap-4">
                     <Checkbox
                         checked={selectionState === 'all'}
                         indeterminate={selectionState === 'some'}
@@ -654,7 +654,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
             {/* Detailed List */}
             <div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">Identity Mapping</h3>
-                <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-hidden">
+                <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-clip">
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
                         <div className="col-span-3 flex items-center gap-4">
                             <Checkbox

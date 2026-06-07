@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
 import { exportToCSV, exportToJSON, exportToPowerShell, downloadFile } from '../utils/exportUtils';
 import { getPolicyKey } from '../utils/policyKey';
@@ -17,7 +17,7 @@ interface UseExportProps {
 
 interface UseExportResult {
     showExportMenu: boolean;
-    setShowExportMenu: (show: boolean) => void;
+    setShowExportMenu: Dispatch<SetStateAction<boolean>>;
     handleExport: (format: ExportFormat) => boolean;
 }
 
