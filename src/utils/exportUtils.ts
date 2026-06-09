@@ -1,5 +1,11 @@
 import { MigrationAnalysis, IdentityType } from '../types';
 import { getPolicyKey } from './policyKey';
+import {
+    describeIdentity,
+    displayIdentityType,
+    isCompoundIdentity,
+    resolveIdentityType,
+} from './identity';
 
 
 // Escape a value for safe inclusion in a CSV cell.
@@ -37,20 +43,11 @@ export const exportToCSV = (
     const rows = results.map(r => {
         const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
         const rec = r.recommendations[selectedIdx];
-        const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-        // For compound identities, show "SP Name on behalf of (App Name)"
-        let displayName = resolvedInfo?.name || r.originalPolicy.displayName || 'Unknown';
-        const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-        if (hasAppId) {
-            const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-            const appName = appInfo?.name || r.originalPolicy.applicationId;
-            displayName = `${displayName} on behalf of (${appName})`;
-        }
-        // Use 'Compound Identity' type when applicable
-        const type = hasAppId ? 'Compound Identity' : (resolvedInfo?.type || r.originalPolicy.type || 'Unknown');
+        const { displayName } = describeIdentity(r.originalPolicy, resolvedNames, { fallbackName: 'Unknown' });
+        const type = displayIdentityType(r.originalPolicy, resolvedNames);
 
         return [
-            displayName,
+            displayName ?? 'Unknown',
             r.originalPolicy.objectId,
             type,
             rec.strategy,
@@ -78,22 +75,13 @@ export const exportToJSON = (
     const exportData = results.map(r => {
         const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
         const rec = r.recommendations[selectedIdx];
-        const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-        // For compound identities, include resolved app info
-        let displayName = resolvedInfo?.name || r.originalPolicy.displayName || 'Unknown';
-        let appName: string | undefined = undefined;
-        const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-        if (hasAppId) {
-            const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-            appName = appInfo?.name || r.originalPolicy.applicationId;
-            displayName = `${displayName} on behalf of (${appName})`;
-        }
+        const { displayName, appName } = describeIdentity(r.originalPolicy, resolvedNames, { fallbackName: 'Unknown' });
 
         return {
             identity: {
                 objectId: r.originalPolicy.objectId,
-                name: displayName,
-                type: hasAppId ? 'Compound Identity' : (resolvedInfo?.type || r.originalPolicy.type || 'Unknown'),
+                name: displayName ?? 'Unknown',
+                type: displayIdentityType(r.originalPolicy, resolvedNames),
                 applicationId: r.originalPolicy.applicationId,
                 applicationName: appName
             },
@@ -154,12 +142,10 @@ Write-Host ""
     };
 
     results.forEach(r => {
-        const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-        const type = resolvedInfo?.type || r.originalPolicy.type || 'Unknown';
-        const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
+        const type = resolveIdentityType(r.originalPolicy, resolvedNames);
 
         // Compound identities have both objectId and applicationId
-        if (hasAppId) {
+        if (isCompoundIdentity(r.originalPolicy)) {
             categorized['Compound Identities'].push(r);
         } else if (type === 'Application' || type === 'ServicePrincipal') {
             categorized['Applications & Service Principals'].push(r);
@@ -176,17 +162,9 @@ Write-Host ""
     const generateIdentityScript = (r: MigrationAnalysis) => {
         const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
         const rec = r.recommendations[selectedIdx];
-        const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-        // For compound identities, show "SP Name on behalf of (App Name)"
-        let displayName = resolvedInfo?.name || r.originalPolicy.displayName || 'Unknown';
-        const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-        if (hasAppId) {
-            const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-            const appName = appInfo?.name || r.originalPolicy.applicationId;
-            displayName = `${displayName} on behalf of (${appName})`;
-        }
+        const { displayName } = describeIdentity(r.originalPolicy, resolvedNames, { fallbackName: 'Unknown' });
 
-        script.push(`# ${psComment(displayName)} (${psComment(r.originalPolicy.objectId)})`);
+        script.push(`# ${psComment(displayName ?? 'Unknown')} (${psComment(r.originalPolicy.objectId)})`);
         script.push(`# Strategy: ${psComment(rec.strategy)} | Confidence: ${rec.confidence}%`);
 
         if (rec.roleNames && rec.roleNames.length > 0) {

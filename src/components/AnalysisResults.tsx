@@ -5,6 +5,7 @@ import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { Checkbox } from './ui';
 import { getPolicyKey } from '../utils/policyKey';
+import { describeIdentity, isCompoundIdentity, resolveIdentityType } from '../utils/identity';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Custom Shape to handle Centering + Animation
@@ -142,13 +143,11 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         };
 
         results.forEach(res => {
-            const id = res.originalPolicy.objectId;
             // Priority: Resolved Type (Graph) -> Cached Type (ARM) -> 'Unknown'
-            let type = resolvedNames[id]?.type || res.originalPolicy.type || 'Unknown';
+            const type = resolveIdentityType(res.originalPolicy, resolvedNames);
 
             // Compound identities have both objectId and applicationId (non-empty)
-            const hasApplicationId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
-            if (hasApplicationId) {
+            if (isCompoundIdentity(res.originalPolicy)) {
                 groups['CompoundIdentity'].push(res);
             } else if (groups[type]) {
                 groups[type].push(res);
@@ -173,15 +172,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         return sortedResults.map(r => {
             const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
             const rec = r.recommendations[selectedIdx];
-            const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
             // For compound identities, show "SP Name on behalf of (App Name)"
-            let displayName = resolvedInfo?.name || r.originalPolicy.displayName;
-            const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-            if (hasAppId && displayName) {
-                const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-                const appName = appInfo?.name || r.originalPolicy.applicationId;
-                displayName = `${displayName} on behalf of (${appName})`;
-            }
+            const { displayName } = describeIdentity(r.originalPolicy, resolvedNames);
 
             const covered = rec?.coveredPermissions?.length || 0;
             const missing = rec?.missingPermissions?.length || 0;
@@ -369,17 +361,11 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         const selectedRoleIdx = selectedRoles[policyKey] || 0;
                         const activeRec = res.recommendations[selectedRoleIdx];
 
-                        const resolvedInfo = resolvedNames[res.originalPolicy.objectId];
                         // For compound identities (objectId + applicationId), show "SP Name on behalf of (App Name)"
-                        let displayName = resolvedInfo?.name || res.originalPolicy.displayName;
-                        const hasAppId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
-                        if (hasAppId && displayName) {
-                            const appInfo = resolvedNames[res.originalPolicy.applicationId!];
-                            const appName = appInfo?.name || res.originalPolicy.applicationId;
-                            displayName = `${displayName} on behalf of (${appName})`;
-                        }
+                        const { displayName } = describeIdentity(res.originalPolicy, resolvedNames);
+                        const hasAppId = isCompoundIdentity(res.originalPolicy);
                         // Use the type from graph resolution if available, else fallback to ARM info
-                        const currentType = resolvedInfo?.type || res.originalPolicy.type;
+                        const currentType = resolveIdentityType(res.originalPolicy, resolvedNames);
                         const isKnown = !!displayName;
                         const isFullyCovered = res.existingCoverage?.isFullyCovered;
                         const showRecs = !isFullyCovered || showSuggestions[policyKey];
