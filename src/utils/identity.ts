@@ -1,0 +1,97 @@
+import { AccessPolicyEntry, IdentityType } from '../types';
+
+/**
+ * Single source of truth for how a legacy access-policy identity is interpreted
+ * and displayed. Previously this logic (compound detection, "on behalf of (App)"
+ * naming, and Graph→ARM→Unknown type resolution) was copy-pasted across the
+ * exporters, the results view, the dashboard, and the analysis hook.
+ */
+
+export type ResolvedNames = Record<string, { name: string; type: IdentityType }>;
+
+export const COMPOUND_IDENTITY_LABEL = 'Compound Identity' as const;
+export type DisplayIdentityType = IdentityType | typeof COMPOUND_IDENTITY_LABEL;
+
+/**
+ * A compound identity is a service principal acting on behalf of an application:
+ * it carries both an `objectId` and a non-empty `applicationId`.
+ */
+export const isCompoundIdentity = (
+  policy: Pick<AccessPolicyEntry, 'applicationId'>
+): boolean => !!policy.applicationId && policy.applicationId.trim() !== '';
+
+/**
+ * Resolve the principal's type with the standard precedence:
+ * Graph resolution → ARM/policy-supplied type → 'Unknown'.
+ * This does NOT collapse compound identities; callers that need the
+ * "Compound Identity" label use {@link displayIdentityType}.
+ */
+export const resolveIdentityType = (
+  policy: Pick<AccessPolicyEntry, 'objectId' | 'type'>,
+  resolvedNames: ResolvedNames
+): IdentityType => resolvedNames[policy.objectId]?.type || policy.type || 'Unknown';
+
+/**
+ * The type to show/group by, collapsing compound identities to a single label.
+ */
+export const displayIdentityType = (
+  policy: Pick<AccessPolicyEntry, 'objectId' | 'type' | 'applicationId'>,
+  resolvedNames: ResolvedNames
+): DisplayIdentityType =>
+  isCompoundIdentity(policy)
+    ? COMPOUND_IDENTITY_LABEL
+    : resolveIdentityType(policy, resolvedNames);
+
+/**
+ * Resolve the backing application's display name for a compound identity,
+ * falling back to the raw applicationId. Returns undefined for non-compound.
+ */
+export const resolveAppName = (
+  policy: Pick<AccessPolicyEntry, 'applicationId'>,
+  resolvedNames: ResolvedNames
+): string | undefined => {
+  if (!isCompoundIdentity(policy)) return undefined;
+  const appId = policy.applicationId!;
+  return resolvedNames[appId]?.name || appId;
+};
+
+export interface IdentityDescriptor {
+  /**
+   * Resolved display name with the "on behalf of (App)" suffix applied for
+   * compound identities. `undefined` when no name could be resolved and no
+   * fallback was provided (callers then render the raw objectId).
+   */
+  displayName: string | undefined;
+  /** Raw resolved principal type (not collapsed to the compound label). */
+  type: IdentityType;
+  isCompound: boolean;
+  /** Resolved application name for compound identities. */
+  appName?: string;
+}
+
+/**
+ * Produce the canonical display descriptor for an identity.
+ *
+ * @param options.fallbackName when set (e.g. 'Unknown' for exports), used as the
+ * base name if nothing resolves — which also means the "on behalf of" suffix is
+ * always applied for compound identities. When omitted (UI views), an
+ * unresolved identity yields `displayName: undefined` and no suffix, matching
+ * the previous behavior where the raw objectId is shown instead.
+ */
+export const describeIdentity = (
+  policy: AccessPolicyEntry,
+  resolvedNames: ResolvedNames,
+  options: { fallbackName?: string } = {}
+): IdentityDescriptor => {
+  const isCompound = isCompoundIdentity(policy);
+  const type = resolveIdentityType(policy, resolvedNames);
+  const appName = resolveAppName(policy, resolvedNames);
+
+  const baseName =
+    resolvedNames[policy.objectId]?.name || policy.displayName || options.fallbackName;
+
+  const displayName =
+    isCompound && baseName ? `${baseName} on behalf of (${appName})` : baseName;
+
+  return { displayName, type, isCompound, appName };
+};

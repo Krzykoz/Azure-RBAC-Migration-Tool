@@ -1,114 +1,15 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
-import { UserIcon, GroupIcon, AppIcon, UnknownIcon, AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon, CompoundIdentityIcon } from './Icons';
-import { PermissionVisualizer } from './PermissionVisualizer';
-import { CoverageBanner } from './CoverageBanner';
+import { UserIcon, GroupIcon, AppIcon, UnknownIcon, CompoundIdentityIcon } from './Icons';
 import { Checkbox } from './ui';
 import { getPolicyKey } from '../utils/policyKey';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-// Custom Shape to handle Centering + Animation
-const CenteredBar = (props: any) => {
-    const { x, y, width, height, payload, type, barWidth, gap } = props;
-
-    // Filter active metrics
-    const metrics = [];
-    if (payload.coveragePct > 0) metrics.push('coverage');
-    if (payload.excessPct > 0) metrics.push('excess');
-    if (payload.missingPct > 0) metrics.push('missing');
-
-    const myIndex = metrics.indexOf(type);
-    if (myIndex === -1) return null; // Don't render if 0% or invalid
-
-    // Calculate Geometry
-    const totalGroupWidth = (metrics.length * barWidth) + ((metrics.length - 1) * gap);
-
-    // Determine Center of the Slot based on the "Standard Layout" assumption
-    // Recharts places bars at: x = SlotStartX + (Index * (Width + Gap))
-    // Standard Order: Coverage (0), Excess (1), Missing (2)
-    // We reverse engineer the Slot Center from the provided 'x' which corresponds to the current 'type's standard position.
-
-    let defaultIndex = 0;
-    if (type === 'excess') defaultIndex = 1;
-    if (type === 'missing') defaultIndex = 2;
-
-    const standardOffset = defaultIndex * (barWidth + gap);
-    // x is where Recharts put THIS bar. So SlotStart = x - standardOffset
-    const slotStartX = x - standardOffset;
-
-    // We want the group of *active* bars to be centered in the "Band"
-    // Recharts BandWidth isn't directly passed easily, but we can assume the band is wide enough 
-    // or calculate from standard 3-bar width.
-    // Standard 3-bar width = 3*20 + 2*2 = 64.
-    // Let's assume the Recharts allocated slot is sized for 3 bars.
-    const fullSlotWidth = (3 * barWidth) + (2 * gap);
-
-    const slotCenterX = slotStartX + fullSlotWidth / 2;
-
-    // New Start X for the centered group
-    const groupStartX = slotCenterX - totalGroupWidth / 2;
-    const myNewX = groupStartX + (myIndex * (barWidth + gap));
-
-    // Colors
-    let fill = '';
-    let textFill = '';
-    let textStroke = '';
-
-    if (type === 'coverage') {
-        fill = '#107c10';
-        textFill = '#0b5a0b';
-        textStroke = '#107c10';
-    } else if (type === 'excess') {
-        fill = '#ffaa44';
-        textFill = '#cc7a00';
-        textStroke = '#ffaa44';
-    } else {
-        fill = '#d13438';
-        textFill = '#a31a1e';
-        textStroke = '#d13438';
-    }
-
-    // Label Logic
-    const isTallEnough = height > 35;
-    const value = payload[`${type}Pct`];
-    const text = value > 0 ? `${value}%` : '';
-
-    let labelX, labelY, anchor, baseline;
-    if (isTallEnough) {
-        labelX = myNewX + barWidth / 2;
-        labelY = y + height / 2;
-        anchor = "middle";
-        baseline = "middle";
-    } else {
-        labelX = myNewX + barWidth / 2;
-        labelY = y + height - 5;
-        anchor = "start";
-        baseline = "central";
-    }
-
-    return (
-        <g>
-            <path d={`M${myNewX},${y} a2,2 0 0 1 2,-2 h${barWidth - 4} a2,2 0 0 1 2,2 v${height} h-${barWidth} z`} fill={fill} />
-            {text && (
-                <text
-                    x={labelX}
-                    y={labelY}
-                    fill={textFill}
-                    stroke={textStroke}
-                    strokeWidth={3}
-                    style={{ paintOrder: 'stroke fill' }}
-                    fontSize={12}
-                    fontWeight={900}
-                    textAnchor={anchor as any}
-                    dominantBaseline={baseline as any}
-                    transform={`rotate(-90, ${labelX}, ${labelY})`}
-                >
-                    {text}
-                </text>
-            )}
-        </g>
-    );
-};
+import {
+    groupResultsByType,
+    flattenInDisplayOrder,
+    toCoverageChartData,
+} from '../utils/identityGrouping';
+import { CoverageChart } from './CoverageChart';
+import { IdentityResultCard } from './IdentityResultCard';
 
 interface AnalysisResultsProps {
     results: MigrationAnalysis[];
@@ -130,165 +31,30 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     setSelectedForExport
 }) => {
 
-    // Grouping Logic - STRICT ORDER: Apps -> Compound -> Groups -> Users -> Unknown
-    const groupedResults = useMemo(() => {
-        const groups: Record<string, MigrationAnalysis[]> = {
-            'CompoundIdentity': [],
-            'Application': [],
-            'ServicePrincipal': [],
-            'Group': [],
-            'User': [],
-            'Unknown': []
-        };
+    const groupedResults = useMemo(
+        () => groupResultsByType(results, resolvedNames),
+        [results, resolvedNames]
+    );
 
-        results.forEach(res => {
-            const id = res.originalPolicy.objectId;
-            // Priority: Resolved Type (Graph) -> Cached Type (ARM) -> 'Unknown'
-            let type = resolvedNames[id]?.type || res.originalPolicy.type || 'Unknown';
-
-            // Compound identities have both objectId and applicationId (non-empty)
-            const hasApplicationId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
-            if (hasApplicationId) {
-                groups['CompoundIdentity'].push(res);
-            } else if (groups[type]) {
-                groups[type].push(res);
-            } else {
-                groups['Unknown'].push(res);
-            }
-        });
-
-        return groups;
-    }, [results, resolvedNames]);
-
-    const activeData = useMemo(() => {
-        const sortedResults = [
-            ...groupedResults['Application'],
-            ...groupedResults['ServicePrincipal'],
-            ...groupedResults['CompoundIdentity'],
-            ...groupedResults['Group'],
-            ...groupedResults['User'],
-            ...groupedResults['Unknown']
-        ];
-
-        return sortedResults.map(r => {
-            const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
-            const rec = r.recommendations[selectedIdx];
-            const resolvedInfo = resolvedNames[r.originalPolicy.objectId];
-            // For compound identities, show "SP Name on behalf of (App Name)"
-            let displayName = resolvedInfo?.name || r.originalPolicy.displayName;
-            const hasAppId = r.originalPolicy.applicationId && r.originalPolicy.applicationId.trim() !== '';
-            if (hasAppId && displayName) {
-                const appInfo = resolvedNames[r.originalPolicy.applicationId!];
-                const appName = appInfo?.name || r.originalPolicy.applicationId;
-                displayName = `${displayName} on behalf of (${appName})`;
-            }
-
-            const covered = rec?.coveredPermissions?.length || 0;
-            const missing = rec?.missingPermissions?.length || 0;
-            const excess = rec?.excessPermissions?.length || 0;
-
-            // Calculate Percentages
-            // Coverage is already a % (confidence)
-            const coveragePct = rec?.confidence || 0;
-
-            // Excess % = Excess / Total Role Permissions (Covered + Excess)
-            const totalRolePerms = covered + excess;
-            const excessPct = totalRolePerms > 0 ? Math.round((excess / totalRolePerms) * 100) : 0;
-
-            // Missing % = Missing / Total Required Permissions (Covered + Missing)
-            const totalRequired = covered + missing;
-            const missingPct = totalRequired > 0 ? Math.round((missing / totalRequired) * 100) : 0;
-
-
-            return {
-                name: displayName || r.originalPolicy.objectId.substring(0, 8),
-                coveragePct,
-                excessPct,
-                missingPct,
-                fullScale: 100,
-                // Keep raw counts for tooltip usage if needed, or just show %
-                rawMissing: missing,
-                rawExcess: excess,
-                role: rec?.roleName || 'None',
-                strategy: rec?.strategy
-            };
-        });
-    }, [groupedResults, selectedRoles, resolvedNames]);
-
-    const CustomTooltip = ({ active, payload, label }: any) => {
-        if (active && payload && payload.length) {
-            const data = payload[0].payload;
-            return (
-                <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 p-3 rounded shadow-fluent text-xs z-50 max-w-[250px]">
-                    <p className="font-bold text-neutral-900 dark:text-white mb-2 truncate">{label}</p>
-                    <div className="space-y-1">
-                        <p className="text-neutral-700 dark:text-neutral-300">
-                            Strategy: <span className="font-semibold text-brand-600 dark:text-brand-400">{data.strategy}</span>
-                        </p>
-                        <p className="text-neutral-700 dark:text-neutral-300">
-                            Coverage: <span className={`font-semibold ${data.coveragePct > 80 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{data.coveragePct}%</span>
-                        </p>
-                        <p className="text-neutral-700 dark:text-neutral-300">
-                            Role: <span className="font-mono text-[10px]">{data.role}</span>
-                        </p>
-                        {data.missingPct > 0 && (
-                            <p className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                                <AlertTriangleIcon className="w-3 h-3" /> {data.missingPct}% Missing ({data.rawMissing})
-                            </p>
-                        )}
-                        {data.excessPct > 0 && (
-                            <p className="text-amber-600 dark:text-amber-400">
-                                + {data.excessPct}% Excess ({data.rawExcess})
-                            </p>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-        return null;
-    };
+    const activeData = useMemo(
+        () => toCoverageChartData(flattenInDisplayOrder(groupedResults), selectedRoles, resolvedNames),
+        [groupedResults, selectedRoles, resolvedNames]
+    );
 
     const [showSuggestions, setShowSuggestions] = React.useState<Record<string, boolean>>({});
     const [showCoverageDetails, setShowCoverageDetails] = React.useState<Record<string, boolean>>({});
-
-    // Ref and handler for horizontal scroll on mouse wheel
-    const chartScrollRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const el = chartScrollRef.current;
-        if (!el) return;
-
-        const handleWheel = (e: WheelEvent) => {
-            if (el.scrollWidth > el.clientWidth) {
-                e.preventDefault();
-                el.scrollLeft += e.deltaY;
-            }
-        };
-
-        el.addEventListener('wheel', handleWheel, { passive: false });
-        return () => el.removeEventListener('wheel', handleWheel);
-    }, []);
+    const [showPolicyDetails, setShowPolicyDetails] = React.useState<Record<string, boolean>>({});
 
     const toggleSuggestion = (id: string) => {
-        setShowSuggestions(prev => ({
-            ...prev,
-            [id]: !prev[id]
-        }));
+        setShowSuggestions(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
     const toggleCoverageDetails = (id: string) => {
-        setShowCoverageDetails(prev => ({
-            ...prev,
-            [id]: !prev[id]
-        }));
+        setShowCoverageDetails(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    const [showPolicyDetails, setShowPolicyDetails] = React.useState<Record<string, boolean>>({});
     const togglePolicyDetails = (id: string) => {
-        setShowPolicyDetails(prev => ({
-            ...prev,
-            [id]: !prev[id]
-        }));
+        setShowPolicyDetails(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
     // Selection helpers
@@ -364,207 +130,24 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                     {title} <span className="ml-1 opacity-60">({groupData.length})</span>
                 </div>
                 <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                    {groupData.map((res, idx) => {
+                    {groupData.map((res) => {
                         const policyKey = getPolicyKey(res.originalPolicy);
-                        const selectedRoleIdx = selectedRoles[policyKey] || 0;
-                        const activeRec = res.recommendations[selectedRoleIdx];
-
-                        const resolvedInfo = resolvedNames[res.originalPolicy.objectId];
-                        // For compound identities (objectId + applicationId), show "SP Name on behalf of (App Name)"
-                        let displayName = resolvedInfo?.name || res.originalPolicy.displayName;
-                        const hasAppId = res.originalPolicy.applicationId && res.originalPolicy.applicationId.trim() !== '';
-                        if (hasAppId && displayName) {
-                            const appInfo = resolvedNames[res.originalPolicy.applicationId!];
-                            const appName = appInfo?.name || res.originalPolicy.applicationId;
-                            displayName = `${displayName} on behalf of (${appName})`;
-                        }
-                        // Use the type from graph resolution if available, else fallback to ARM info
-                        const currentType = resolvedInfo?.type || res.originalPolicy.type;
-                        const isKnown = !!displayName;
-                        const isFullyCovered = res.existingCoverage?.isFullyCovered;
-                        const showRecs = !isFullyCovered || showSuggestions[policyKey];
-                        const showDetails = showCoverageDetails[policyKey];
-
-                        const isSelected = selectedForExport.has(policyKey);
-
                         return (
-                            <div key={policyKey} className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
-                                <div className="grid grid-cols-12 gap-4 px-6 py-4 items-start">
-                                    {/* Identity Column */}
-                                    <div className="col-span-3 pr-2">
-                                        <div className="flex items-start gap-4">
-                                            <Checkbox
-                                                checked={isSelected}
-                                                onChange={() => toggleItemSelection(policyKey)}
-                                                className="mt-1"
-                                            />
-                                            <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 ${isKnown ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
-                                                }`}>
-                                                {hasAppId && <CompoundIdentityIcon className="w-4 h-4" />}
-                                                {!hasAppId && currentType === 'User' && <UserIcon className="w-4 h-4" />}
-                                                {!hasAppId && currentType === 'Group' && <GroupIcon className="w-4 h-4" />}
-                                                {!hasAppId && (currentType === 'ServicePrincipal' || currentType === 'Application') && <AppIcon className="w-4 h-4" />}
-                                                {!hasAppId && currentType === 'Unknown' && <UnknownIcon className="w-4 h-4" />}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                {isKnown ? (
-                                                    <div className="font-medium text-sm text-neutral-900 dark:text-white break-words">
-                                                        {displayName}
-                                                    </div>
-                                                ) : (
-                                                    <div className="font-mono text-xs text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded border border-neutral-200 dark:border-neutral-700 break-all">
-                                                        {res.originalPolicy.objectId}
-                                                    </div>
-                                                )}
-
-                                                {/* Show Object ID in smaller font if we have a name */}
-                                                {displayName && displayName !== res.originalPolicy.objectId && (
-                                                    <div className="text-[10px] text-neutral-500 dark:text-neutral-500 font-mono mt-0.5 truncate">{res.originalPolicy.objectId}</div>
-                                                )}
-
-                                                {/* Details about Type and AppID if available */}
-                                                <div className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-1 flex flex-col gap-0.5">
-                                                    {hasAppId && (
-                                                        <span title="Application ID">App ID: {res.originalPolicy.applicationId}</span>
-                                                    )}
-                                                    {currentType !== 'Unknown' && (
-                                                        <span className="opacity-75">{currentType}</span>
-                                                    )}
-                                                </div>
-
-                                                {/* Existing Coverage Badge */}
-                                                {res.existingCoverage && res.existingCoverage.isFullyCovered && (
-                                                    <div className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium border border-green-200 dark:border-green-800">
-                                                        <CheckCircleIcon className="w-3 h-3" />
-                                                        Already Covered
-                                                    </div>
-                                                )}
-                                                {res.existingCoverage && !res.existingCoverage.isFullyCovered && res.existingCoverage.coveredPermissions.length > 0 && (
-                                                    <div className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-medium border border-blue-100 dark:border-blue-800">
-                                                        <ShieldCheckIcon className="w-3 h-3" />
-                                                        Partially Covered
-                                                    </div>
-                                                )}
-
-                                                {/* Fallback message if resolution fails completely and no other info */}
-                                                {!isKnown && !res.originalPolicy.applicationId && (
-                                                    <div className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">Resolution Failed</div>
-                                                )}
-
-                                                {/* Original Policy View Toggle */}
-                                                <button
-                                                    onClick={() => togglePolicyDetails(policyKey)}
-                                                    className="mt-2 block text-[10px] font-medium text-brand-600 dark:text-brand-400 hover:underline focus:outline-none"
-                                                >
-                                                    {showPolicyDetails[policyKey] ? 'Hide Legacy Policy' : 'View Legacy Policy'}
-                                                </button>
-
-                                                {/* Original Policy Details */}
-                                                {showPolicyDetails[policyKey] && (
-                                                    <div className="mt-2 p-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded text-[10px]">
-                                                        {Object.entries(res.originalPolicy.permissions).map(([category, perms]) => {
-                                                            if (!perms || perms.length === 0) return null;
-
-                                                            return (
-                                                                <div key={category} className="mb-1 last:mb-0">
-                                                                    <span className="font-semibold text-neutral-700 dark:text-neutral-300 capitalize">{category}:</span>
-                                                                    <div className="flex flex-wrap gap-1 mt-0.5">
-                                                                        {perms.map(p => (
-                                                                            <span key={p} className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-neutral-600 dark:text-neutral-300">
-                                                                                {p}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Recommendations Column */}
-                                    <div className="col-span-4">
-                                        {/* Selection Tabs for Strategies */}
-                                        {res.recommendations.length > 0 && (
-                                            <div className={`flex flex-wrap gap-2 mb-3 ${!showRecs ? 'opacity-50 grayscale' : ''}`}>
-                                                {res.recommendations.map((rec, recIdx) => (
-                                                    <button
-                                                        key={recIdx}
-                                                        onClick={() => setSelectedRoles(prev => ({ ...prev, [policyKey]: recIdx }))}
-                                                        disabled={!showRecs}
-                                                        className={`px-2 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wide border transition-all ${selectedRoleIdx === recIdx
-                                                            ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-900/20 dark:border-brand-800 dark:text-brand-300'
-                                                            : 'bg-white border-neutral-200 text-neutral-500 hover:border-brand-300 hover:text-neutral-700 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
-                                                            }`}
-                                                        title={rec.reasoning}
-                                                    >
-                                                        {rec.strategy}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {/* Active Role Display */}
-                                        <div className={`flex flex-wrap gap-1.5 mb-2 ${!showRecs ? 'opacity-50' : ''}`}>
-                                            {activeRec.roleNames && activeRec.roleNames.length > 0 ? (
-                                                activeRec.roleNames.map((roleName, rIdx) => (
-                                                    <span key={rIdx} className="inline-flex items-center px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                                                        {roleName}
-                                                    </span>
-                                                ))
-                                            ) : (
-                                                <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{activeRec.roleName}</span>
-                                            )}
-                                        </div>
-
-                                        <div className={`text-xs text-neutral-700 dark:text-neutral-400 line-clamp-3 group-hover:line-clamp-none transition-all ${!showRecs ? 'opacity-50' : ''}`}>
-                                            {activeRec.reasoning}
-                                        </div>
-                                    </div>
-
-                                    {/* Confidence */}
-                                    <div className="col-span-2 text-right">
-                                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${activeRec.confidence > 80 ? 'text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-900/20' :
-                                            activeRec.confidence > 50 ? 'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20' :
-                                                'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20'
-                                            }`}>
-                                            {activeRec.confidence}%
-                                        </span>
-                                    </div>
-
-                                    {/* Gaps Analysis */}
-                                    <div className="col-span-3">
-                                        <div className="flex flex-col gap-1">
-                                            {res.existingCoverage && (
-                                                <CoverageBanner
-                                                    existingCoverage={res.existingCoverage}
-                                                    objectId={policyKey}
-                                                    showDetails={showDetails}
-                                                    onToggleDetails={toggleCoverageDetails}
-                                                    showSuggestions={showSuggestions[policyKey]}
-                                                    onToggleSuggestions={toggleSuggestion}
-                                                />
-                                            )}
-
-                                            {activeRec.missingPermissions.length === 0 && !res.existingCoverage?.isFullyCovered && (
-                                                <div className="flex items-center gap-1.5 text-green-700 dark:text-green-400 text-xs font-semibold mb-1">
-                                                    <CheckCircleIcon className="w-3.5 h-3.5" />
-                                                    <span>Complete Coverage</span>
-                                                </div>
-                                            )}
-
-                                            {showRecs && (
-                                                <PermissionVisualizer
-                                                    breakdown={activeRec.roleBreakdown || []}
-                                                    missing={activeRec.missingPermissions}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <IdentityResultCard
+                                key={policyKey}
+                                res={res}
+                                resolvedNames={resolvedNames}
+                                selectedRoleIdx={selectedRoles[policyKey] || 0}
+                                onSelectRole={(recIdx) => setSelectedRoles(prev => ({ ...prev, [policyKey]: recIdx }))}
+                                isSelected={selectedForExport.has(policyKey)}
+                                onToggleSelection={() => toggleItemSelection(policyKey)}
+                                showSuggestions={!!showSuggestions[policyKey]}
+                                onToggleSuggestions={() => toggleSuggestion(policyKey)}
+                                showCoverageDetails={!!showCoverageDetails[policyKey]}
+                                onToggleCoverageDetails={() => toggleCoverageDetails(policyKey)}
+                                showPolicyDetails={!!showPolicyDetails[policyKey]}
+                                onTogglePolicyDetails={() => togglePolicyDetails(policyKey)}
+                            />
                         );
                     })}
                 </div>
@@ -576,80 +159,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
         <div className="space-y-8 fade-in-up">
 
             {/* Overview Charts */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="md:col-span-3 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700" style={{ height: '392px' }}>
-                    <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Coverage Distribution</h4>
-                    <div
-                        ref={chartScrollRef}
-                        className="overflow-x-auto overflow-y-hidden h-[calc(100%-24px)]"
-                    >
-                        <div style={{ minWidth: Math.max(600, activeData.length * 80), height: '100%' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={activeData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
-                                    <XAxis
-                                        dataKey="name"
-                                        stroke="#9ca3af"
-                                        fontSize={10}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        interval={0}
-                                        angle={-45}
-                                        textAnchor="end"
-                                        height={80}
-                                        tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
-                                    />
-                                    <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} unit="%" />
-                                    <Tooltip
-                                        content={<CustomTooltip />}
-                                        cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
-                                    />
-                                    <Bar
-                                        dataKey="coveragePct"
-                                        shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={20} gap={2} />}
-                                        barSize={20}
-                                        isAnimationActive={true}
-                                    />
-                                    <Bar
-                                        dataKey="excessPct"
-                                        shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={20} gap={2} />}
-                                        barSize={20}
-                                        isAnimationActive={true}
-                                    />
-                                    <Bar
-                                        dataKey="missingPct"
-                                        shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={20} gap={2} />}
-                                        barSize={20}
-                                        isAnimationActive={true}
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-
-                <div className="md:col-span-1 space-y-4">
-                    <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
-                        <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                            {Math.round(activeData.reduce((acc, curr) => acc + curr.coveragePct, 0) / (activeData.length || 1))}%
-                        </div>
-                        <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Coverage</div>
-                    </div>
-                    <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
-                        <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                            {activeData.reduce((acc, curr) => acc + curr.rawMissing, 0)}
-                        </div>
-                        <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Missing Permissions</div>
-                    </div>
-                    <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
-                        <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                            {activeData.reduce((acc, curr) => acc + curr.rawExcess, 0)}
-                        </div>
-                        <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Excess Permissions</div>
-                    </div>
-                </div>
-            </div>
+            <CoverageChart data={activeData} theme={theme} />
 
             {/* Detailed List */}
             <div>

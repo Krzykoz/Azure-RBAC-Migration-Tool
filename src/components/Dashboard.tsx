@@ -4,6 +4,7 @@ import { useAzureData, useAnalysis, useExport, ExportFormat } from '../hooks';
 import { ArrowRightIcon, LoaderIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from './Icons';
 import { SidePanel } from './SidePanel';
 import { getPolicyKey } from '../utils/policyKey';
+import { isCompoundIdentity, resolveIdentityType } from '../utils/identity';
 
 // Lazily loaded so the heavy charting library (recharts) is only fetched once an
 // analysis completes, keeping the initial bundle small.
@@ -91,8 +92,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const idsToResolve: string[] = [];
       results.forEach((r) => {
         idsToResolve.push(r.originalPolicy.objectId);
-        if (r.originalPolicy.applicationId?.trim()) {
-          idsToResolve.push(r.originalPolicy.applicationId);
+        if (isCompoundIdentity(r.originalPolicy)) {
+          idsToResolve.push(r.originalPolicy.applicationId!);
         }
       });
       resolveIdentities(idsToResolve);
@@ -115,8 +116,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const newlyKnown: string[] = [];
     results.forEach((r) => {
       const key = getPolicyKey(r.originalPolicy);
-      const resolvedType = resolvedNames[r.originalPolicy.objectId]?.type;
-      const type = resolvedType || r.originalPolicy.type || 'Unknown';
+      const type = resolveIdentityType(r.originalPolicy, resolvedNames);
       if (type !== 'Unknown' && !autoAddedExportKeys.current.has(key)) {
         newlyKnown.push(key);
       }

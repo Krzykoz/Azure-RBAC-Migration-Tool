@@ -3,15 +3,12 @@ import {
   KeyVaultResponse,
   SubscriptionResponse,
   TenantResponse,
-  RoleDefinitionResponse,
   RoleAssignmentResponse,
   GraphResponse,
   parseKeyVaultResponse,
   parseSubscriptions,
   parseTenants,
-  parseRoleDefinitions,
   parsePrincipalTypes,
-  parseRoleAssignments,
   parseGraphResponse
 } from './azureResponseParser';
 import { AZURE_API_VERSIONS, AZURE_ENDPOINTS, ANALYSIS_CONSTANTS } from '../constants';
@@ -118,8 +115,7 @@ export const getRoleDefinitions = async (
   const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const value = await azureFetchAllPages<RoleDefinitionResponse['value'][number]>(url, token);
-    const roles = parseRoleDefinitions({ value });
+    const roles = await azureFetchAllPages<RoleDefinition>(url, token);
 
     // Filter to Key Vault related roles
     return roles.filter((role) => {
@@ -157,8 +153,7 @@ export const getRoleAssignments = async (
   const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const value = await azureFetchAllPages<RoleAssignment>(url, token);
-    return parseRoleAssignments({ value });
+    return await azureFetchAllPages<RoleAssignment>(url, token);
   } catch (e) {
     console.error('Failed to fetch role assignments', e);
     return [];

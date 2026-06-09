@@ -1,4 +1,4 @@
-import { Subscription, KeyVault, IdentityType, RoleAssignment, RoleDefinition } from '../types';
+import { Subscription, KeyVault, IdentityType } from '../types';
 import { KEY_VAULT_ALL_PERMISSIONS, LEGACY_KEY_VAULT_PERMISSIONS } from '../utils/permissionDefinitions';
 
 export interface KeyVaultProperties {
@@ -142,22 +142,6 @@ export const parsePrincipalTypes = (data: RoleAssignmentResponse): Record<string
         });
     }
     return cache;
-};
-
-export interface RoleAssignmentListResponse {
-    value: RoleAssignment[];
-}
-
-export const parseRoleAssignments = (data: RoleAssignmentListResponse): RoleAssignment[] => {
-    return data.value;
-};
-
-export interface RoleDefinitionResponse {
-    value: RoleDefinition[];
-}
-
-export const parseRoleDefinitions = (data: RoleDefinitionResponse): RoleDefinition[] => {
-    return data.value;
 };
 
 export interface GraphObject {
