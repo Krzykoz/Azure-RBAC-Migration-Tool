@@ -1,7 +1,13 @@
 import { MigrationAnalysis } from '../types';
 import { IDENTITY_TYPE_ORDER } from '../constants';
 import { getPolicyKey } from './policyKey';
-import { ResolvedNames, describeIdentity, isCompoundIdentity, resolveIdentityType } from './identity';
+import {
+  ResolvedNames,
+  IdentityIconKind,
+  describeIdentity,
+  isCompoundIdentity,
+  resolveIdentityType,
+} from './identity';
 
 /** The grouping buckets, in canonical display order. */
 export type IdentityGroupKey = (typeof IDENTITY_TYPE_ORDER)[number];
@@ -43,6 +49,37 @@ export const groupResultsByType = (
 /** Flatten grouped results into a single list following {@link IDENTITY_TYPE_ORDER}. */
 export const flattenInDisplayOrder = (groups: GroupedResults): MigrationAnalysis[] =>
   IDENTITY_TYPE_ORDER.flatMap((key) => groups[key]);
+
+/**
+ * The identity sections shown in the results table / export, in display order.
+ * A single section may merge several {@link IdentityGroupKey} buckets (e.g.
+ * Applications & Service Principals). Shared by the live `AnalysisResults` view
+ * and the HTML export so section order, labels, and icons stay in lockstep.
+ */
+export interface IdentityDisplayGroup {
+  label: string;
+  iconKind: IdentityIconKind;
+  /** Grouping buckets merged under this display section. */
+  keys: IdentityGroupKey[];
+}
+
+export const IDENTITY_DISPLAY_GROUPS: readonly IdentityDisplayGroup[] = [
+  {
+    label: 'Applications & Service Principals',
+    iconKind: 'app',
+    keys: ['Application', 'ServicePrincipal'],
+  },
+  { label: 'Compound Identities', iconKind: 'compound', keys: ['CompoundIdentity'] },
+  { label: 'Groups', iconKind: 'group', keys: ['Group'] },
+  { label: 'Users', iconKind: 'user', keys: ['User'] },
+  { label: 'Unknown Identities', iconKind: 'unknown', keys: ['Unknown'] },
+] as const;
+
+/** Collect the results belonging to a display section, in bucket order. */
+export const collectDisplayGroup = (
+  groups: GroupedResults,
+  group: IdentityDisplayGroup
+): MigrationAnalysis[] => group.keys.flatMap((key) => groups[key]);
 
 export interface CoverageChartDatum {
   name: string;

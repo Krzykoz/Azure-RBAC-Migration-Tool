@@ -10,7 +10,9 @@ A browser‑only tool that helps you migrate Azure Key Vault access policies to 
   - **Minimize Excess** – Strict, avoids unnecessary permissions.
   - **Balanced** – Good trade‑off between coverage and security.
   - **Max Coverage** – Prioritises full permission coverage.
-- **Export results** – Download analysis as CSV, JSON, or PowerShell script.
+- **Export results** – Download analysis as CSV, JSON, PowerShell script, or a
+  self‑contained interactive HTML report you can share with a colleague (no server
+  or install needed – just open the file in a browser).
 - **Dark / Light mode** – Tailwind‑based theming with enhanced contrast for readability.
 
 ## Prerequisites
@@ -56,7 +58,10 @@ The production bundle is emitted to the `dist` folder, which is already ignored 
 2. Open the app, paste the Management token (and optionally the Graph token), and click **Connect**.
 3. Select a subscription and a Key Vault, then click **Run Analysis**.
 4. Review the recommended role combinations. Switch between the three strategies using the buttons.
-5. Export the results via the **Export** button in the workspace header.
+5. Export the results via the **Export** button in the workspace header. Choose
+   **HTML** to produce a single shareable file that mirrors the analysis view –
+   identities, object IDs, App IDs, suggested roles per strategy, confidence, and
+   covered/missing/excess permissions – with a built‑in light/dark toggle.
 
 ## Manual / Interactive Mode
 
@@ -132,6 +137,7 @@ src/
 ├─ utils/                    # Helper utilities
 │   ├─ tokenUtils.ts          # JWT decode & username extraction
 │   ├─ exportUtils.ts         # CSV/JSON/PowerShell export
+│   ├─ htmlExport.ts          # Self-contained interactive HTML report export
 │   ├─ permissionDefinitions.ts # Legacy Key Vault permission catalog
 │   ├─ roleNormalization.ts   # Normalizes role JSON from varied shapes
 │   └─ builtInRoles.ts        # Loads bundled built-in roles

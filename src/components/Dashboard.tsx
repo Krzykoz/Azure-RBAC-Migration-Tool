@@ -67,6 +67,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     vaultName: selectedVault?.name || '',
     subscriptionId: selectedSub?.subscriptionId || '',
     vaultResourceId: selectedVault?.id || '',
+    theme,
   });
 
   // Close the export dropdown when clicking outside of it.
@@ -243,7 +244,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </button>
                   {showExportMenu && (
                     <div className="absolute right-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded shadow-lg z-10 min-w-[160px]">
-                      {(['csv', 'json', 'powershell'] as ExportFormat[]).map((format) => (
+                      {(['csv', 'json', 'powershell', 'html'] as ExportFormat[]).map((format) => (
                         <button
                           key={format}
                           onClick={() => handleExport(format)}

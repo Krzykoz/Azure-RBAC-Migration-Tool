@@ -1,9 +1,10 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { MigrationAnalysis, IdentityType } from '../types';
 import { exportToCSV, exportToJSON, exportToPowerShell, downloadFile } from '../utils/exportUtils';
+import { exportToHtml } from '../utils/htmlExport';
 import { getPolicyKey } from '../utils/policyKey';
 
-export type ExportFormat = 'csv' | 'json' | 'powershell';
+export type ExportFormat = 'csv' | 'json' | 'powershell' | 'html';
 
 interface UseExportProps {
     results: MigrationAnalysis[];
@@ -13,6 +14,7 @@ interface UseExportProps {
     vaultName: string;
     subscriptionId: string;
     vaultResourceId: string;
+    theme: 'light' | 'dark';
 }
 
 interface UseExportResult {
@@ -32,6 +34,7 @@ export const useExport = ({
     vaultName,
     subscriptionId,
     vaultResourceId,
+    theme,
 }: UseExportProps): UseExportResult => {
     const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -72,6 +75,18 @@ export const useExport = ({
                     downloadFile(ps, `${vaultName}-migration-${timestamp}.ps1`, 'text/plain');
                     break;
                 }
+                case 'html': {
+                    const html = exportToHtml(
+                        filteredResults,
+                        selectedRoles,
+                        resolvedNames,
+                        theme,
+                        vaultName,
+                        subscriptionId
+                    );
+                    downloadFile(html, `${vaultName}-analysis-${timestamp}.html`, 'text/html');
+                    break;
+                }
             }
 
             setShowExportMenu(false);
@@ -85,6 +100,7 @@ export const useExport = ({
             vaultName,
             subscriptionId,
             vaultResourceId,
+            theme,
         ]
     );
 

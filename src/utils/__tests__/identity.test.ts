@@ -5,6 +5,8 @@ import {
   displayIdentityType,
   resolveAppName,
   describeIdentity,
+  identityIconKind,
+  shouldShowObjectIdSeparately,
   ResolvedNames,
 } from '../identity';
 import { makePolicy } from '../../test/factories';
@@ -81,5 +83,29 @@ describe('describeIdentity', () => {
   it('does not suffix an unresolved compound identity when no fallback is given (UI behavior)', () => {
     const d = describeIdentity(makePolicy({}, { objectId: 'ghost', applicationId: 'app1' }), names);
     expect(d.displayName).toBeUndefined();
+  });
+});
+
+describe('identityIconKind', () => {
+  it('maps compound identities to the compound icon regardless of type', () => {
+    expect(identityIconKind(true, 'ServicePrincipal')).toBe('compound');
+    expect(identityIconKind(true, 'User')).toBe('compound');
+  });
+
+  it('maps principal types to their icon buckets', () => {
+    expect(identityIconKind(false, 'User')).toBe('user');
+    expect(identityIconKind(false, 'Group')).toBe('group');
+    expect(identityIconKind(false, 'ServicePrincipal')).toBe('app');
+    expect(identityIconKind(false, 'Application')).toBe('app');
+    expect(identityIconKind(false, 'Unknown')).toBe('unknown');
+  });
+});
+
+describe('shouldShowObjectIdSeparately', () => {
+  it('is true only when a resolved name differs from the object id', () => {
+    expect(shouldShowObjectIdSeparately('Alice', 'u1')).toBe(true);
+    expect(shouldShowObjectIdSeparately('u1', 'u1')).toBe(false);
+    expect(shouldShowObjectIdSeparately(undefined, 'u1')).toBe(false);
+    expect(shouldShowObjectIdSeparately('', 'u1')).toBe(false);
   });
 });

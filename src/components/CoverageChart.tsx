@@ -2,16 +2,23 @@ import React, { useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AlertTriangleIcon } from './Icons';
 import { CoverageChartDatum } from '../utils/identityGrouping';
+import {
+    CHART_BAR_GAP,
+    CHART_BAR_WIDTH,
+    CHART_BAND,
+    CoverageSegmentType,
+    activeCoverageSegments,
+    coverageLabelPlacement,
+    coverageOverviewStats,
+    coverageSegmentStyle,
+} from '../utils/chartPresentation';
 
 // Custom Shape to handle Centering + Animation
 const CenteredBar = (props: any) => {
     const { x, y, width, height, payload, type, barWidth, gap } = props;
 
-    // Filter active metrics
-    const metrics = [];
-    if (payload.coveragePct > 0) metrics.push('coverage');
-    if (payload.excessPct > 0) metrics.push('excess');
-    if (payload.missingPct > 0) metrics.push('missing');
+    // Active segments (in canonical order), shared with the HTML export.
+    const metrics = activeCoverageSegments(payload).map((s) => s.type);
 
     const myIndex = metrics.indexOf(type);
     if (myIndex === -1) return null; // Don't render if 0% or invalid
@@ -45,42 +52,22 @@ const CenteredBar = (props: any) => {
     const groupStartX = slotCenterX - totalGroupWidth / 2;
     const myNewX = groupStartX + (myIndex * (barWidth + gap));
 
-    // Colors
-    let fill = '';
-    let textFill = '';
-    let textStroke = '';
+    // Colors (shared with the HTML export): label fill is a darker tint, while
+    // the halo stroke matches the bar color.
+    const style = coverageSegmentStyle(type as CoverageSegmentType);
+    const fill = style.bar;
+    const textFill = style.label;
+    const textStroke = style.bar;
 
-    if (type === 'coverage') {
-        fill = '#107c10';
-        textFill = '#0b5a0b';
-        textStroke = '#107c10';
-    } else if (type === 'excess') {
-        fill = '#ffaa44';
-        textFill = '#cc7a00';
-        textStroke = '#ffaa44';
-    } else {
-        fill = '#d13438';
-        textFill = '#a31a1e';
-        textStroke = '#d13438';
-    }
-
-    // Label Logic
-    const isTallEnough = height > 35;
+    // Label Logic (placement shared with the HTML export; always rotated -90°).
     const value = payload[`${type}Pct`];
     const text = value > 0 ? `${value}%` : '';
 
-    let labelX, labelY, anchor, baseline;
-    if (isTallEnough) {
-        labelX = myNewX + barWidth / 2;
-        labelY = y + height / 2;
-        anchor = "middle";
-        baseline = "middle";
-    } else {
-        labelX = myNewX + barWidth / 2;
-        labelY = y + height - 5;
-        anchor = "start";
-        baseline = "central";
-    }
+    const place = coverageLabelPlacement(myNewX, y, height, barWidth);
+    const labelX = place.x;
+    const labelY = place.y;
+    const anchor = place.anchor;
+    const baseline = place.baseline;
 
     return (
         <g>
@@ -163,6 +150,8 @@ export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => 
         return () => el.removeEventListener('wheel', handleWheel);
     }, []);
 
+    const stats = coverageOverviewStats(data);
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="md:col-span-3 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700" style={{ height: '392px' }}>
@@ -171,7 +160,7 @@ export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => 
                     ref={chartScrollRef}
                     className="overflow-x-auto overflow-y-hidden h-[calc(100%-24px)]"
                 >
-                    <div style={{ minWidth: Math.max(600, data.length * 80), height: '100%' }}>
+                    <div style={{ width: data.length * CHART_BAND + 64, height: '100%', margin: '0 auto' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
@@ -194,20 +183,20 @@ export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => 
                                 />
                                 <Bar
                                     dataKey="coveragePct"
-                                    shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={20} gap={2} />}
-                                    barSize={20}
+                                    shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={CHART_BAR_WIDTH} gap={CHART_BAR_GAP} />}
+                                    barSize={CHART_BAR_WIDTH}
                                     isAnimationActive={true}
                                 />
                                 <Bar
                                     dataKey="excessPct"
-                                    shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={20} gap={2} />}
-                                    barSize={20}
+                                    shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={CHART_BAR_WIDTH} gap={CHART_BAR_GAP} />}
+                                    barSize={CHART_BAR_WIDTH}
                                     isAnimationActive={true}
                                 />
                                 <Bar
                                     dataKey="missingPct"
-                                    shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={20} gap={2} />}
-                                    barSize={20}
+                                    shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={CHART_BAR_WIDTH} gap={CHART_BAR_GAP} />}
+                                    barSize={CHART_BAR_WIDTH}
                                     isAnimationActive={true}
                                 />
                             </BarChart>
@@ -220,19 +209,19 @@ export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => 
             <div className="md:col-span-1 space-y-4">
                 <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                     <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                        {Math.round(data.reduce((acc, curr) => acc + curr.coveragePct, 0) / (data.length || 1))}%
+                        {stats.avgCoverage}%
                     </div>
                     <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Coverage</div>
                 </div>
                 <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                     <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                        {data.reduce((acc, curr) => acc + curr.rawMissing, 0)}
+                        {stats.totalMissing}
                     </div>
                     <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Missing Permissions</div>
                 </div>
                 <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
                     <div className="text-3xl font-light text-neutral-900 dark:text-white">
-                        {data.reduce((acc, curr) => acc + curr.rawExcess, 0)}
+                        {stats.totalExcess}
                     </div>
                     <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Excess Permissions</div>
                 </div>

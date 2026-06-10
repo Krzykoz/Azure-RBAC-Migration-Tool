@@ -5,7 +5,34 @@ import { PermissionVisualizer } from './PermissionVisualizer';
 import { CoverageBanner } from './CoverageBanner';
 import { Checkbox } from './ui';
 import { getPolicyKey } from '../utils/policyKey';
-import { describeIdentity, isCompoundIdentity, resolveIdentityType } from '../utils/identity';
+import {
+    IdentityIconKind,
+    describeIdentity,
+    identityIconKind,
+    isCompoundIdentity,
+    resolveIdentityType,
+    shouldShowObjectIdSeparately,
+} from '../utils/identity';
+import {
+    ConfidenceLevel,
+    confidenceLevel,
+    existingCoverageBadge,
+    showsCompleteCoverage,
+} from '../utils/resultPresentation';
+
+const ICON_BY_KIND: Record<IdentityIconKind, React.ReactNode> = {
+    compound: <CompoundIdentityIcon className="w-4 h-4" />,
+    user: <UserIcon className="w-4 h-4" />,
+    group: <GroupIcon className="w-4 h-4" />,
+    app: <AppIcon className="w-4 h-4" />,
+    unknown: <UnknownIcon className="w-4 h-4" />,
+};
+
+const CONFIDENCE_CLASS: Record<ConfidenceLevel, string> = {
+    high: 'text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-900/20',
+    mid: 'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20',
+    low: 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20',
+};
 
 interface IdentityResultCardProps {
     res: MigrationAnalysis;
@@ -62,11 +89,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
                         />
                         <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 ${isKnown ? 'bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300' : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-400'
                             }`}>
-                            {hasAppId && <CompoundIdentityIcon className="w-4 h-4" />}
-                            {!hasAppId && currentType === 'User' && <UserIcon className="w-4 h-4" />}
-                            {!hasAppId && currentType === 'Group' && <GroupIcon className="w-4 h-4" />}
-                            {!hasAppId && (currentType === 'ServicePrincipal' || currentType === 'Application') && <AppIcon className="w-4 h-4" />}
-                            {!hasAppId && currentType === 'Unknown' && <UnknownIcon className="w-4 h-4" />}
+                            {ICON_BY_KIND[identityIconKind(hasAppId, currentType)]}
                         </div>
                         <div className="min-w-0 flex-1">
                             {isKnown ? (
@@ -80,7 +103,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
                             )}
 
                             {/* Show Object ID in smaller font if we have a name */}
-                            {displayName && displayName !== res.originalPolicy.objectId && (
+                            {shouldShowObjectIdSeparately(displayName, res.originalPolicy.objectId) && (
                                 <div className="text-[10px] text-neutral-500 dark:text-neutral-500 font-mono mt-0.5 truncate">{res.originalPolicy.objectId}</div>
                             )}
 
@@ -95,13 +118,13 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
                             </div>
 
                             {/* Existing Coverage Badge */}
-                            {res.existingCoverage && res.existingCoverage.isFullyCovered && (
+                            {existingCoverageBadge(res.existingCoverage) === 'covered' && (
                                 <div className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium border border-green-200 dark:border-green-800">
                                     <CheckCircleIcon className="w-3 h-3" />
                                     Already Covered
                                 </div>
                             )}
-                            {res.existingCoverage && !res.existingCoverage.isFullyCovered && res.existingCoverage.coveredPermissions.length > 0 && (
+                            {existingCoverageBadge(res.existingCoverage) === 'partial' && (
                                 <div className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-medium border border-blue-100 dark:border-blue-800">
                                     <ShieldCheckIcon className="w-3 h-3" />
                                     Partially Covered
@@ -188,10 +211,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
 
                 {/* Confidence */}
                 <div className="col-span-2 text-right">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${activeRec.confidence > 80 ? 'text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-900/20' :
-                        activeRec.confidence > 50 ? 'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20' :
-                            'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20'
-                        }`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${CONFIDENCE_CLASS[confidenceLevel(activeRec.confidence)]}`}>
                         {activeRec.confidence}%
                     </span>
                 </div>
@@ -210,7 +230,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
                             />
                         )}
 
-                        {activeRec.missingPermissions.length === 0 && !res.existingCoverage?.isFullyCovered && (
+                        {showsCompleteCoverage(activeRec.missingPermissions.length, res.existingCoverage) && (
                             <div className="flex items-center gap-1.5 text-green-700 dark:text-green-400 text-xs font-semibold mb-1">
                                 <CheckCircleIcon className="w-3.5 h-3.5" />
                                 <span>Complete Coverage</span>

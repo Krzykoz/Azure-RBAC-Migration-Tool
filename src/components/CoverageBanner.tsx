@@ -2,6 +2,7 @@ import React from 'react';
 import { ExistingCoverageResult } from '../types';
 import { CheckCircleIcon, ShieldCheckIcon } from './Icons';
 import { PermissionVisualizer } from './PermissionVisualizer';
+import { coverageBannerKind, roleMatchesToBreakdown } from '../utils/resultPresentation';
 
 interface CoverageBannerProps {
     existingCoverage: ExistingCoverageResult;
@@ -20,9 +21,12 @@ export const CoverageBanner: React.FC<CoverageBannerProps> = ({
     showSuggestions,
     onToggleSuggestions
 }) => {
-    const isFullyCovered = existingCoverage.isFullyCovered;
+    const kind = coverageBannerKind(existingCoverage);
+    if (kind === 'none') return null;
 
-    if (isFullyCovered) {
+    const breakdown = roleMatchesToBreakdown(existingCoverage);
+
+    if (kind === 'full') {
         return (
             <>
                 <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded text-xs mb-2">
@@ -32,14 +36,7 @@ export const CoverageBanner: React.FC<CoverageBannerProps> = ({
                     {showDetails && (
                         <div className="pt-2 border-t border-green-200 dark:border-green-800">
                             <div className="text-[10px] font-medium text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">Existing Roles Coverage</div>
-                            <PermissionVisualizer
-                                breakdown={existingCoverage.roleMatches.map(rm => ({
-                                    roleName: rm.roleName,
-                                    covered: rm.covered,
-                                    excess: rm.excess
-                                }))}
-                                missing={[]}
-                            />
+                            <PermissionVisualizer breakdown={breakdown} missing={[]} />
                         </div>
                     )}
                     <button
@@ -62,34 +59,23 @@ export const CoverageBanner: React.FC<CoverageBannerProps> = ({
     }
 
     // Partially Covered
-    if (existingCoverage.roleMatches.length > 0) {
-        return (
-            <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded text-xs mb-2">
-                <div className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1 mb-2">
-                    <ShieldCheckIcon className="w-3.5 h-3.5" /> Partially Covered
-                </div>
-                {showDetails && (
-                    <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
-                        <div className="text-[10px] font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-1">Existing Roles Coverage</div>
-                        <PermissionVisualizer
-                            breakdown={existingCoverage.roleMatches.map(rm => ({
-                                roleName: rm.roleName,
-                                covered: rm.covered,
-                                excess: rm.excess
-                            }))}
-                            missing={existingCoverage.missingPermissions}
-                        />
-                    </div>
-                )}
-                <button
-                    onClick={() => onToggleDetails(objectId)}
-                    className="mt-2 w-full text-center text-[10px] text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium border-t border-blue-200 dark:border-blue-800 pt-1"
-                >
-                    {showDetails ? 'Hide Details' : 'Show Details'}
-                </button>
+    return (
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded text-xs mb-2">
+            <div className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1 mb-2">
+                <ShieldCheckIcon className="w-3.5 h-3.5" /> Partially Covered
             </div>
-        );
-    }
-
-    return null;
+            {showDetails && (
+                <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
+                    <div className="text-[10px] font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-1">Existing Roles Coverage</div>
+                    <PermissionVisualizer breakdown={breakdown} missing={existingCoverage.missingPermissions} />
+                </div>
+            )}
+            <button
+                onClick={() => onToggleDetails(objectId)}
+                className="mt-2 w-full text-center text-[10px] text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium border-t border-blue-200 dark:border-blue-800 pt-1"
+            >
+                {showDetails ? 'Hide Details' : 'Show Details'}
+            </button>
+        </div>
+    );
 };

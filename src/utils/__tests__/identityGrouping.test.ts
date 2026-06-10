@@ -3,6 +3,8 @@ import {
   groupResultsByType,
   flattenInDisplayOrder,
   toCoverageChartData,
+  collectDisplayGroup,
+  IDENTITY_DISPLAY_GROUPS,
 } from '../identityGrouping';
 import { ResolvedNames } from '../identity';
 import { MigrationAnalysis, SuggestedRole } from '../../types';
@@ -68,6 +70,48 @@ describe('flattenInDisplayOrder', () => {
     );
     const order = flattenInDisplayOrder(groups).map((r) => r.originalPolicy.objectId);
     expect(order).toEqual(['app', 'sp', 'usr', 'ghost']);
+  });
+});
+
+describe('IDENTITY_DISPLAY_GROUPS / collectDisplayGroup', () => {
+  it('defines the display sections in canonical order', () => {
+    expect(IDENTITY_DISPLAY_GROUPS.map((g) => g.label)).toEqual([
+      'Applications & Service Principals',
+      'Compound Identities',
+      'Groups',
+      'Users',
+      'Unknown Identities',
+    ]);
+  });
+
+  it('merges Application and ServicePrincipal buckets under one section', () => {
+    const groups = groupResultsByType(
+      [
+        analysis({ objectId: 'app', type: 'Application' }),
+        analysis({ objectId: 'sp', type: 'ServicePrincipal' }),
+        analysis({ objectId: 'usr', type: 'User' }),
+      ],
+      names
+    );
+    const appsSection = IDENTITY_DISPLAY_GROUPS[0];
+    expect(appsSection.keys).toEqual(['Application', 'ServicePrincipal']);
+    const ids = collectDisplayGroup(groups, appsSection).map((r) => r.originalPolicy.objectId);
+    expect(ids).toEqual(['app', 'sp']);
+  });
+
+  it('every display-group bucket covers each grouped result exactly once', () => {
+    const groups = groupResultsByType(
+      [
+        analysis({ objectId: 'app', type: 'Application' }),
+        analysis({ objectId: 'sp', applicationId: 'app', type: 'ServicePrincipal' }),
+        analysis({ objectId: 'grp', type: 'Group' }),
+        analysis({ objectId: 'usr', type: 'User' }),
+        analysis({ objectId: 'ghost', type: 'Unknown' }),
+      ],
+      names
+    );
+    const collected = IDENTITY_DISPLAY_GROUPS.flatMap((g) => collectDisplayGroup(groups, g));
+    expect(collected).toHaveLength(flattenInDisplayOrder(groups).length);
   });
 });
 
