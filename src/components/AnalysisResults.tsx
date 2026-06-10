@@ -3,13 +3,24 @@ import { MigrationAnalysis, IdentityType } from '../types';
 import { UserIcon, GroupIcon, AppIcon, UnknownIcon, CompoundIdentityIcon } from './Icons';
 import { Checkbox } from './ui';
 import { getPolicyKey } from '../utils/policyKey';
+import { IdentityIconKind } from '../utils/identity';
 import {
     groupResultsByType,
     flattenInDisplayOrder,
     toCoverageChartData,
+    collectDisplayGroup,
+    IDENTITY_DISPLAY_GROUPS,
 } from '../utils/identityGrouping';
 import { CoverageChart } from './CoverageChart';
 import { IdentityResultCard } from './IdentityResultCard';
+
+const GROUP_ICON_BY_KIND: Record<IdentityIconKind, React.ReactNode> = {
+    app: <AppIcon className="w-4 h-4" />,
+    compound: <CompoundIdentityIcon className="w-4 h-4" />,
+    group: <GroupIcon className="w-4 h-4" />,
+    user: <UserIcon className="w-4 h-4" />,
+    unknown: <UnknownIcon className="w-4 h-4" />,
+};
 
 interface AnalysisResultsProps {
     results: MigrationAnalysis[];
@@ -179,12 +190,16 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                         <div className="col-span-3">Gap Analysis</div>
                     </div>
 
-                    {/* Render Groups Ordered: Apps, Compound, Groups, Users, Unknown */}
-                    {renderIdentityGroup('Applications & Service Principals', [...groupedResults['Application'], ...groupedResults['ServicePrincipal']], <AppIcon className="w-4 h-4" />)}
-                    {renderIdentityGroup('Compound Identities', groupedResults['CompoundIdentity'], <CompoundIdentityIcon className="w-4 h-4" />)}
-                    {renderIdentityGroup('Groups', groupedResults['Group'], <GroupIcon className="w-4 h-4" />)}
-                    {renderIdentityGroup('Users', groupedResults['User'], <UserIcon className="w-4 h-4" />)}
-                    {renderIdentityGroup('Unknown Identities', groupedResults['Unknown'], <UnknownIcon className="w-4 h-4" />)}
+                    {/* Render identity sections in the shared display order */}
+                    {IDENTITY_DISPLAY_GROUPS.map((group) => (
+                        <React.Fragment key={group.label}>
+                            {renderIdentityGroup(
+                                group.label,
+                                collectDisplayGroup(groupedResults, group),
+                                GROUP_ICON_BY_KIND[group.iconKind]
+                            )}
+                        </React.Fragment>
+                    ))}
 
                 </div>
             </div>

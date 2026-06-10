@@ -42,6 +42,28 @@ export const displayIdentityType = (
     ? COMPOUND_IDENTITY_LABEL
     : resolveIdentityType(policy, resolvedNames);
 
+/** Canonical icon bucket for an identity, decoupled from any specific renderer. */
+export type IdentityIconKind = 'compound' | 'user' | 'group' | 'app' | 'unknown';
+
+/**
+ * Map a (compound, resolved-type) pair to the canonical icon bucket. Both the
+ * live view (React icon components) and the HTML export (inline SVG paths) map
+ * this single decision to their own icon set so they always match.
+ */
+export const identityIconKind = (compound: boolean, type: IdentityType): IdentityIconKind => {
+  if (compound) return 'compound';
+  if (type === 'User') return 'user';
+  if (type === 'Group') return 'group';
+  if (type === 'ServicePrincipal' || type === 'Application') return 'app';
+  return 'unknown';
+};
+
+/** Whether the raw object id should be shown as a sub-line beneath a resolved name. */
+export const shouldShowObjectIdSeparately = (
+  displayName: string | undefined,
+  objectId: string
+): boolean => !!displayName && displayName !== objectId;
+
 /**
  * Resolve the backing application's display name for a compound identity,
  * falling back to the raw applicationId. Returns undefined for non-compound.
