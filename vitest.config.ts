@@ -27,6 +27,12 @@ export default defineConfig({
       {
         extends: true,
         plugins: [solid()],
+        resolve: {
+          // Resolve solid-js to its browser/DOM build so render() works in
+          // jsdom; without this Vitest picks the SSR build and Solid throws
+          // "Client-only API called on the server side."
+          conditions: ['development', 'browser'],
+        },
         test: {
           name: 'components',
           environment: 'jsdom',
@@ -34,6 +40,11 @@ export default defineConfig({
           include: ['src/**/*.{test,spec}.tsx'],
           setupFiles: ['src/test/setup.ts'],
           clearMocks: true,
+          server: {
+            deps: {
+              inline: [/solid-js/, /@solidjs\/testing-library/],
+            },
+          },
         },
       },
     ],
