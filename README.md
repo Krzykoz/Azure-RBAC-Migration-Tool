@@ -106,7 +106,7 @@ npm run update-roles
 ```
 
 This runs `scripts/update-builtin-roles.mjs`, which calls
-`az role definition list`, keeps only built‑in roles that expose a Key Vault
+`az role definition list`, keeps only built-in roles that expose a Key Vault
 data action, strips volatile fields, and rewrites the JSON in the shape the app
 parses. The script aborts (without overwriting the bundled file) if no Key Vault
 roles are returned. The JSON carries `_source` and `_generated` metadata
@@ -114,48 +114,64 @@ recording how and when it was produced.
 
 ## Architecture
 
+The codebase is split into three layers: a framework‑agnostic **core** (domain
+types, analysis engine, presentation rules, exporters), a thin **azure** API
+layer (fetch + response parsing), and the React **ui/app** layer on top.
+
 ```
 src/
-├─ components/               # React UI components
-│   ├─ Dashboard.tsx          # Main workspace
-│   ├─ LoginScreen.tsx        # Token entry UI (+ Manual / Offline mode entry)
-│   ├─ ManualModePage.tsx     # Manual / interactive mode with live role suggestions
-│   ├─ OfflineInputPage.tsx   # Offline analysis from pasted policies + roles
-│   ├─ Header.tsx
-│   ├─ SidePanel.tsx
-│   ├─ AnalysisResults.tsx
-│   ├─ PermissionVisualizer.tsx
-│   ├─ CoverageBanner.tsx
-│   ├─ Icons.tsx
-│   ├─ ui/                    # Shared primitives (Checkbox, CopyableCommand)
+├─ main.tsx                     # Entry point
+├─ styles.css                   # Tailwind theme tokens + animations
+├─ app/                         # Application shell
+│   ├─ App.tsx                  # Root component / view switching
+│   ├─ theme.ts                 # Light/dark theme resolution + persistence
 │   └─ ErrorBoundary.tsx
-├─ services/                 # Azure API wrappers
-│   ├─ azureService.ts        # ARM/Graph fetch helpers
-│   ├─ azureResponseParser.ts # Parses ARM/Graph responses into app types
-│   └─ analysisService.ts     # Role-mapping analysis engine
-├─ hooks/                    # React hooks (data fetching, analysis, export, clipboard)
-├─ utils/                    # Helper utilities
-│   ├─ tokenUtils.ts          # JWT decode & username extraction
-│   ├─ exportUtils.ts         # CSV/JSON/PowerShell export
-│   ├─ htmlExport.ts          # Self-contained interactive HTML report export
-│   ├─ permissionDefinitions.ts # Legacy Key Vault permission catalog
-│   ├─ roleNormalization.ts   # Normalizes role JSON from varied shapes
-│   └─ builtInRoles.ts        # Loads bundled built-in roles
-├─ assets/                   # Static files
-│   ├─ AcessPolicyRBACMapping.csv  # Legacy permission → RBAC data action map
-│   └─ builtInKeyVaultRoles.json   # Bundled built-in roles (see update-roles)
-├─ types.ts
-├─ App.tsx                   # Root component
-└─ vite-env.d.ts             # TypeScript typings for Vite globals (optional)
+├─ core/                        # Framework-agnostic domain logic (no React)
+│   ├─ types.ts                 # Domain model
+│   ├─ constants.ts             # API versions, strategy weights, UI constants
+│   ├─ analysis/                # The role-mapping engine
+│   │   ├─ permissionCatalog.ts # Legacy verb → RBAC action mapping (CSV-backed)
+│   │   ├─ actionMatching.ts    # Wildcard-aware data-action matching
+│   │   ├─ coverage.ts          # Per-role covered/excess computation
+│   │   ├─ strategies.ts        # Weighted combination search per strategy
+│   │   ├─ engine.ts            # analyzePolicies / analyzeExistingCoverage
+│   │   └─ index.ts             # Facade bound to the default catalog
+│   ├─ identity/                # Identity interpretation & grouping
+│   │   ├─ identity.ts          # Compound detection, names, icon kinds
+│   │   ├─ grouping.ts          # Type buckets, display sections, chart data
+│   │   └─ policyKey.ts         # Stable composite row key
+│   ├─ permissions/             # Legacy permission catalog & categories
+│   ├─ roles/                   # Role-definition normalization + bundled roles
+│   ├─ presentation/            # Shared display decisions (badges, charts, …)
+│   ├─ export/                  # CSV/JSON/PowerShell + self-contained HTML report
+│   └─ token/jwt.ts             # JWT claim extraction (name, tenant)
+├─ azure/                       # Azure API layer
+│   ├─ client.ts                # ARM/Graph fetch helpers, paging, batching
+│   └─ parsers.ts               # Raw response → domain types
+├─ ui/                          # React UI
+│   ├─ icons.tsx                # Inline icon set
+│   ├─ primitives/              # Checkbox, CopyableCommand
+│   ├─ hooks/                   # useAzureData, useAnalysis, useExport, …
+│   ├─ components/              # Workspace components (results, charts, …)
+│   └─ screens/                 # LoginScreen, Dashboard, OfflineInputPage,
+│                               # ManualModePage
+├─ assets/
+│   ├─ accessPolicyRbacMapping.csv   # Legacy permission → RBAC data action map
+│   └─ builtInKeyVaultRoles.json     # Bundled built-in roles (see update-roles)
+└─ testing/factories.ts         # Shared test factories
 
 scripts/
-└─ update-builtin-roles.mjs  # Regenerates builtInKeyVaultRoles.json (npm run update-roles)
+└─ update-builtin-roles.mjs     # Regenerates builtInKeyVaultRoles.json (npm run update-roles)
 ```
+
+The HTML export and the live React view share every *decision* (permission
+ordering, confidence tiers, banner states, icons, chart geometry) through the
+`core/presentation` helpers, so the two renderings cannot drift apart.
 
 ## How It Works
 
 1. **Data fetching** – Retrieves subscriptions, vaults, role definitions, and access policies via Azure ARM APIs.
-2. **Mapping** – Loads `AcessPolicyRBACMapping.csv` to map legacy permissions to RBAC data actions.
+2. **Mapping** – Loads `accessPolicyRbacMapping.csv` to map legacy permissions to RBAC data actions.
 3. **Analysis** – Runs three greedy algorithms to propose optimal role sets.
 4. **Scoring** – Confidence reflects how much of the policy a role set covers; excess permissions are reported separately so you can review over-grants.
 5. **Presentation** – Visual breakdowns with charts, tooltips, and export options.

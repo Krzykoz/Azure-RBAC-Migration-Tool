@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* Dark mode is toggled by adding `.dark` to <html> (see app/theme.ts), not by
+   the OS preference. This custom variant provides class-based dark styling
+   (the equivalent of Tailwind v3's `darkMode: 'class'`). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Fluent-flavored theme tokens: brand and neutral palettes are defined
+   explicitly. `brand-800` and `neutral-950` are intentionally left undefined. */
+@theme {
+  --font-sans: "Segoe UI", "Segoe UI Web (West European)", -apple-system,
+    BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+
+  --color-brand-50: #eff6fc;
+  --color-brand-100: #deecf9;
+  --color-brand-200: #c7e0f4;
+  --color-brand-300: #50e6ff;
+  --color-brand-400: #0078d4;
+  --color-brand-500: #0078d4;
+  --color-brand-600: #106ebe;
+  --color-brand-700: #005a9e;
+  --color-brand-900: #004578;
+
+  --color-neutral-50: #faf9f8;
+  --color-neutral-100: #f3f2f1;
+  --color-neutral-200: #edebe9;
+  --color-neutral-300: #e1dfdd;
+  --color-neutral-400: #d2d0ce;
+  --color-neutral-500: #c8c6c4;
+  --color-neutral-600: #a19f9d;
+  --color-neutral-700: #605e5c;
+  --color-neutral-800: #323130;
+  --color-neutral-900: #201f1e;
+
+  /* `rounded-sm` is 2px in this design system (Tailwind v4 defaults it to 4px).
+     The bare `rounded` utility uses the separate `--radius` token, so it is
+     unaffected. */
+  --radius-sm: 0.125rem;
+
+  --shadow-fluent: 0 1.6px 3.6px 0 rgba(0, 0, 0, 0.132),
+    0 0.3px 0.9px 0 rgba(0, 0, 0, 0.108);
+  --shadow-fluent-hover: 0 3.2px 7.2px 0 rgba(0, 0, 0, 0.132),
+    0 0.6px 1.8px 0 rgba(0, 0, 0, 0.108);
+}
+
+/* Lightweight entrance animations referenced by components. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.3s ease-out both;
+}
+
+@keyframes icon-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.icon-pop {
+  animation: icon-pop 0.2s ease-out both;
+}
