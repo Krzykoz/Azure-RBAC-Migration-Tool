@@ -15,21 +15,20 @@
     "update-roles": "node scripts/update-builtin-roles.mjs"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "recharts": "^3.5.0"
+    "solid-js": "^1.9.5"
   },
   "devDependencies": {
+    "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/postcss": "^4.1.17",
+    "@testing-library/jest-dom": "^6.6.3",
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.6",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.22",
+    "jsdom": "^25.0.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",
+    "vite-plugin-solid": "^2.11.6",
     "vitest": "^3.2.4"
   }
 }

@@ -1,9 +1,12 @@
 import path from 'path';
+import solid from 'vite-plugin-solid';
 import { defineConfig } from 'vitest/config';
 
-// Standalone Vitest config. It deliberately does not reuse vite.config.ts (whose
-// default export is a function) so config merging stays simple. Logic tests run in
-// the Node environment; Vite's default pipeline handles `?raw` and JSON imports.
+// Two Vitest projects share one alias config:
+//  - "logic": framework-agnostic *.test.ts run in the fast Node environment,
+//    exactly as before the SolidJS migration.
+//  - "components": Solid *.test.tsx run in jsdom, compiled by vite-plugin-solid,
+//    with @testing-library/jest-dom matchers loaded only here.
 export default defineConfig({
   resolve: {
     alias: {
@@ -11,8 +14,28 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
-    include: ['src/**/*.{test,spec}.ts'],
-    clearMocks: true,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'logic',
+          environment: 'node',
+          include: ['src/**/*.{test,spec}.ts'],
+          clearMocks: true,
+        },
+      },
+      {
+        extends: true,
+        plugins: [solid()],
+        test: {
+          name: 'components',
+          environment: 'jsdom',
+          globals: true,
+          include: ['src/**/*.{test,spec}.tsx'],
+          setupFiles: ['src/test/setup.ts'],
+          clearMocks: true,
+        },
+      },
+    ],
   },
 });
