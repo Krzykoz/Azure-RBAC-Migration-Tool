@@ -8,7 +8,7 @@ describe('downloadFile', () => {
     });
 
     it('builds a blob anchor, triggers the download, and cleans up', () => {
-        const createObjectURL = vi.fn(() => 'blob:fake-url');
+        const createObjectURL = vi.fn((_blob: Blob) => 'blob:fake-url');
         const revokeObjectURL = vi.fn();
         vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
 
