@@ -2,9 +2,9 @@ import { CoverageChartDatum } from './identityGrouping';
 
 /**
  * Single source of truth for the Coverage Distribution chart's colors, geometry
- * and derived stats. Both the live chart (`CoverageChart`, drawn with recharts)
- * and the static export (`htmlExport`, drawn as raw SVG) consume these so the two
- * renderings can't drift apart.
+ * and derived stats. Both the live chart (`CoverageChart`) and the static export
+ * (`htmlExport`), each drawn as raw SVG, consume these so the two renderings
+ * can't drift apart.
  */
 
 export type CoverageSegmentType = 'coverage' | 'excess' | 'missing';

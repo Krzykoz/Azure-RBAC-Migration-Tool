@@ -116,7 +116,7 @@ recording how and when it was produced.
 
 ```
 src/
-├─ components/               # React UI components
+├─ components/               # SolidJS UI components
 │   ├─ Dashboard.tsx          # Main workspace
 │   ├─ LoginScreen.tsx        # Token entry UI (+ Manual / Offline mode entry)
 │   ├─ ManualModePage.tsx     # Manual / interactive mode with live role suggestions
@@ -124,6 +124,8 @@ src/
 │   ├─ Header.tsx
 │   ├─ SidePanel.tsx
 │   ├─ AnalysisResults.tsx
+│   ├─ CoverageChart.tsx      # Coverage distribution chart (hand-rolled SVG)
+│   ├─ IdentityResultCard.tsx
 │   ├─ PermissionVisualizer.tsx
 │   ├─ CoverageBanner.tsx
 │   ├─ Icons.tsx
@@ -133,7 +135,7 @@ src/
 │   ├─ azureService.ts        # ARM/Graph fetch helpers
 │   ├─ azureResponseParser.ts # Parses ARM/Graph responses into app types
 │   └─ analysisService.ts     # Role-mapping analysis engine
-├─ hooks/                    # React hooks (data fetching, analysis, export, clipboard)
+├─ hooks/                    # Solid reactive state (data fetching, analysis, export, clipboard)
 ├─ utils/                    # Helper utilities
 │   ├─ tokenUtils.ts          # JWT decode & username extraction
 │   ├─ exportUtils.ts         # CSV/JSON/PowerShell export
@@ -175,11 +177,11 @@ scripts/
 
 ## Technologies
 
-- **React 19**
+- **SolidJS**
 - **TypeScript**
 - **Vite**
 - **Tailwind CSS**
-- **Recharts**
+- **Hand-rolled SVG charts** (no charting library)
 
 ## License
 
