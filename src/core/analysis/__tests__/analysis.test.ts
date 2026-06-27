@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  analyzePolicies,
-  analyzeExistingCoverage,
-  runWeightedAnalysis,
-} from '../index';
+import { analyzePolicies, analyzeExistingCoverage } from '../engine';
+import { runWeightedAnalysis } from '../strategies';
 import { ANALYSIS_STRATEGIES } from '../../constants';
 import { SuggestedRole } from '../../types';
 import { makeRole, makePolicy, makeAssignment, ACTIONS } from '../../../testing/factories';

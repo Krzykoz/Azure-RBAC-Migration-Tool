@@ -30,6 +30,7 @@ dist-ssr
 # Local caches
 .cache
 .coverage
+.impeccable
 
 # Build caches
 .vite

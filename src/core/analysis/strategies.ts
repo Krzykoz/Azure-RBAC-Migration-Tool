@@ -1,14 +1,14 @@
 import { RoleDefinition, SuggestedRole, RoleBreakdown } from '../types';
 import { ANALYSIS_CONSTANTS, StrategyConfig } from '../constants';
 import { calculateCoverage, RoleCoverage } from './coverage';
-import { PermissionCatalog } from './permissionCatalog';
+import { defaultPermissionCatalog, PermissionCatalog } from './permissionCatalog';
 
 /**
  * Confidence reflects coverage only (how much of the policy the role set
  * satisfies). Excess permissions are reported separately so the user can review
  * over-grants. Result is clamped to 0–100.
  */
-export const calculateConfidence = (totalNeeded: number, covered: number): number => {
+const calculateConfidence = (totalNeeded: number, covered: number): number => {
   if (totalNeeded === 0) return 100;
   return Math.max(0, Math.min(100, Math.round((covered / totalNeeded) * 100)));
 };
@@ -39,7 +39,7 @@ export const runWeightedAnalysis = (
   required: Set<string>,
   roles: RoleDefinition[],
   config: StrategyConfig,
-  catalog: PermissionCatalog
+  catalog: PermissionCatalog = defaultPermissionCatalog
 ): SuggestedRole => {
   const maxCombinations = ANALYSIS_CONSTANTS.MAX_COMBINATION_SIZE;
 

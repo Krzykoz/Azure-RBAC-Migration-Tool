@@ -6,7 +6,7 @@ import {
   MigrationAnalysis,
   IdentityType,
 } from '../../core/types';
-import { analyzePolicies, analyzeExistingCoverage } from '../../core/analysis';
+import { analyzePolicies, analyzeExistingCoverage } from '../../core/analysis/engine';
 import { STRATEGY_PRIORITY } from '../../core/constants';
 import { getPolicyKey } from '../../core/identity/policyKey';
 import { resolveIdentityType } from '../../core/identity/identity';

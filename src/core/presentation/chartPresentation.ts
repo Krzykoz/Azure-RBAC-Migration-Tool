@@ -8,7 +8,7 @@ import { CoverageChartDatum } from '../identity/grouping';
 
 export type CoverageSegmentType = 'coverage' | 'excess' | 'missing';
 
-export interface CoverageSegmentStyle {
+interface CoverageSegmentStyle {
   type: CoverageSegmentType;
   /** The `CoverageChartDatum` field holding this segment's percentage. */
   valueKey: 'coveragePct' | 'excessPct' | 'missingPct';
@@ -28,7 +28,7 @@ export const COVERAGE_SEGMENT_STYLES: CoverageSegmentStyle[] = [
   { type: 'missing', valueKey: 'missingPct', bar: '#d13438', label: '#a31a1e' },
 ];
 
-export interface ActiveCoverageSegment extends CoverageSegmentStyle {
+interface ActiveCoverageSegment extends CoverageSegmentStyle {
   value: number;
 }
 
@@ -54,7 +54,7 @@ export const CHART_LABEL_INSIDE_MIN_HEIGHT = 35;
 export const coverageGroupWidth = (segmentCount: number): number =>
   segmentCount * CHART_BAR_WIDTH + Math.max(0, segmentCount - 1) * CHART_BAR_GAP;
 
-export interface CoverageLabelPlacement {
+interface CoverageLabelPlacement {
   x: number;
   y: number;
   anchor: 'start' | 'middle' | 'end';
@@ -85,7 +85,7 @@ export const coverageLabelPlacement = (
 };
 
 // --- Derived summary stats --------------------------------------------------
-export interface CoverageOverviewStats {
+interface CoverageOverviewStats {
   avgCoverage: number;
   totalMissing: number;
   totalExcess: number;

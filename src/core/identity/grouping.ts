@@ -10,9 +10,9 @@ import {
 } from './identity';
 
 /** The grouping buckets, in canonical display order. */
-export type IdentityGroupKey = (typeof IDENTITY_TYPE_ORDER)[number];
+type IdentityGroupKey = (typeof IDENTITY_TYPE_ORDER)[number];
 
-export type GroupedResults = Record<IdentityGroupKey, MigrationAnalysis[]>;
+type GroupedResults = Record<IdentityGroupKey, MigrationAnalysis[]>;
 
 const emptyGroups = (): GroupedResults =>
   IDENTITY_TYPE_ORDER.reduce((acc, key) => {
@@ -56,7 +56,7 @@ export const flattenInDisplayOrder = (groups: GroupedResults): MigrationAnalysis
  * Applications & Service Principals). Shared by the live results view and the
  * HTML export so section order, labels, and icons stay in lockstep.
  */
-export interface IdentityDisplayGroup {
+interface IdentityDisplayGroup {
   label: string;
   iconKind: IdentityIconKind;
   /** Grouping buckets merged under this display section. */

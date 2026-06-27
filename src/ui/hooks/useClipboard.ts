@@ -19,5 +19,5 @@ export const useClipboard = () => {
 
   const isCopied = useCallback((id: string) => copiedId === id, [copiedId]);
 
-  return { copyToClipboard, isCopied, copiedId };
+  return { copyToClipboard, isCopied };
 };

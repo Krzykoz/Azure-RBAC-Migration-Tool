@@ -6,7 +6,7 @@ import { validateToken, getSubscriptions, getRoleDefinitions } from '../../azure
 
 export type RoleSource = 'builtin' | 'paste' | 'token';
 
-export interface UseManualRoles {
+interface UseManualRoles {
   roleSource: RoleSource;
   setRoleSource: (source: RoleSource) => void;
   activeRoles: RoleDefinition[];
