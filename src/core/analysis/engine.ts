@@ -7,7 +7,7 @@ import {
   ExistingCoverageResult,
 } from '../types';
 import { ANALYSIS_STRATEGIES } from '../constants';
-import { PermissionCatalog } from './permissionCatalog';
+import { defaultPermissionCatalog, PermissionCatalog } from './permissionCatalog';
 import { calculateCoverage } from './coverage';
 import { runWeightedAnalysis } from './strategies';
 
@@ -54,7 +54,7 @@ const mergeDuplicateStrategies = (strategies: SuggestedRole[]): SuggestedRole[] 
 export const analyzePolicies = (
   policies: AccessPolicyEntry[],
   availableRoles: RoleDefinition[],
-  catalog: PermissionCatalog
+  catalog: PermissionCatalog = defaultPermissionCatalog
 ): MigrationAnalysis[] => {
   const kvRoles = availableRoles.filter(isKeyVaultRole);
 
@@ -80,7 +80,7 @@ export const analyzeExistingCoverage = (
   assignments: RoleAssignment[],
   availableRoles: RoleDefinition[],
   scopeFilter: string | undefined,
-  catalog: PermissionCatalog
+  catalog: PermissionCatalog = defaultPermissionCatalog
 ): ExistingCoverageResult => {
   const requiredActions = catalog.getRequiredActions(policy);
 

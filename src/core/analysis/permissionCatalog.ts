@@ -5,7 +5,7 @@ import RBAC_MAPPING_CSV from '../../assets/accessPolicyRbacMapping.csv?raw';
  * Maps a legacy access-policy verb (per category) to the RBAC data action(s)
  * that satisfy it. Shape: `{ [category]: { [verb]: rbacAction[] } }`.
  */
-export type PermissionMap = Record<string, Record<string, string[]>>;
+type PermissionMap = Record<string, Record<string, string[]>>;
 
 /**
  * The abstraction the analysis engine depends on instead of module-global
@@ -38,7 +38,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
  * RBAC column may list several actions separated by `;`. Multi-word actions
  * (e.g. "ManageContacts") are joined and lowercased to form the verb key.
  */
-export const parsePermissionMap = (csvContent: string): PermissionMap => {
+const parsePermissionMap = (csvContent: string): PermissionMap => {
   const map: PermissionMap = { keys: {}, secrets: {}, certificates: {}, storage: {} };
 
   // Split on CRLF or LF and drop blank lines so a CRLF-saved CSV does not leave a

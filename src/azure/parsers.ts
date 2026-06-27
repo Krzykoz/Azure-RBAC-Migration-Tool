@@ -6,7 +6,7 @@ import { KEY_VAULT_ALL_PERMISSIONS, LEGACY_KEY_VAULT_PERMISSIONS } from '../core
  * Kept free of fetch logic so they can be tested with plain fixtures.
  */
 
-export interface KeyVaultProperties {
+interface KeyVaultProperties {
   sku?: { name: string };
   accessPolicies?: Array<{
     tenantId: string;
@@ -117,13 +117,8 @@ export interface TenantResponse {
   }>;
 }
 
-export const parseTenants = (data: TenantResponse): Record<string, string> => {
-  const map: Record<string, string> = {};
-  data.value.forEach((t) => {
-    map[t.tenantId] = t.displayName;
-  });
-  return map;
-};
+export const parseTenants = (data: TenantResponse): Record<string, string> =>
+  Object.fromEntries(data.value.map((t) => [t.tenantId, t.displayName]));
 
 export interface RoleAssignmentResponse {
   value: Array<{
@@ -149,7 +144,7 @@ export const parsePrincipalTypes = (data: RoleAssignmentResponse): Record<string
   return cache;
 };
 
-export interface GraphObject {
+interface GraphObject {
   id: string;
   displayName?: string;
   appDisplayName?: string;

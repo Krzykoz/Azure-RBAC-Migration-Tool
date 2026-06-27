@@ -13,7 +13,7 @@ export type ConfidenceLevel = 'high' | 'mid' | 'low';
 export const confidenceLevel = (confidence: number): ConfidenceLevel =>
   confidence > 80 ? 'high' : confidence > 50 ? 'mid' : 'low';
 
-export type ExistingCoverageBadge = 'covered' | 'partial' | null;
+type ExistingCoverageBadge = 'covered' | 'partial' | null;
 
 /**
  * The small inline badge shown next to an identity: fully covered by existing
@@ -28,7 +28,7 @@ export const existingCoverageBadge = (
   return null;
 };
 
-export type CoverageBannerKind = 'full' | 'partial' | 'none';
+type CoverageBannerKind = 'full' | 'partial' | 'none';
 
 /**
  * The Gap-Analysis banner state: a green "Fully Covered" banner, a blue

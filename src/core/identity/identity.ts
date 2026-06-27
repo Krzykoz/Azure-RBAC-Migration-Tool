@@ -9,8 +9,8 @@ import { AccessPolicyEntry, IdentityType } from '../types';
 
 export type ResolvedNames = Record<string, { name: string; type: IdentityType }>;
 
-export const COMPOUND_IDENTITY_LABEL = 'Compound Identity' as const;
-export type DisplayIdentityType = IdentityType | typeof COMPOUND_IDENTITY_LABEL;
+const COMPOUND_IDENTITY_LABEL = 'Compound Identity' as const;
+type DisplayIdentityType = IdentityType | typeof COMPOUND_IDENTITY_LABEL;
 
 /**
  * A compound identity is a service principal acting on behalf of an application:
@@ -75,7 +75,7 @@ export const resolveAppName = (
   return resolvedNames[appId]?.name || appId;
 };
 
-export interface IdentityDescriptor {
+interface IdentityDescriptor {
   /**
    * Resolved display name with the "on behalf of (App)" suffix applied for
    * compound identities. `undefined` when no name could be resolved and no

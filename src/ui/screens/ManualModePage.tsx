@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AccessPolicyEntry, MigrationAnalysis } from '../../core/types';
 import { LEGACY_KEY_VAULT_PERMISSIONS } from '../../core/permissions/legacy';
-import { analyzePolicies } from '../../core/analysis';
+import { analyzePolicies } from '../../core/analysis/engine';
 import { ArrowLeftIcon, ShieldCheckIcon } from '../icons';
 import {
   CATEGORY_ORDER,

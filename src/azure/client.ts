@@ -16,7 +16,7 @@ import { AZURE_API_VERSIONS, AZURE_ENDPOINTS, ANALYSIS_CONSTANTS } from '../core
 const { ARM, GRAPH } = AZURE_ENDPOINTS;
 const API = AZURE_API_VERSIONS;
 
-export class AzureError extends Error {
+class AzureError extends Error {
   constructor(message: string, public readonly originalError?: unknown) {
     super(message);
     this.name = 'AzureError';

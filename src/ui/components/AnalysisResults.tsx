@@ -109,14 +109,6 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     });
   };
 
-  const getAllSelectionState = (): 'all' | 'some' | 'none' => {
-    const allIds = results.map((r) => getPolicyKey(r.originalPolicy));
-    const selectedCount = allIds.filter((id) => selectedForExport.has(id)).length;
-    if (selectedCount === 0) return 'none';
-    if (selectedCount === allIds.length) return 'all';
-    return 'some';
-  };
-
   const getCategorySelectionState = (groupData: MigrationAnalysis[]): 'all' | 'some' | 'none' => {
     const ids = groupData.map((r) => getPolicyKey(r.originalPolicy));
     const selectedCount = ids.filter((id) => selectedForExport.has(id)).length;
@@ -124,6 +116,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
     if (selectedCount === ids.length) return 'all';
     return 'some';
   };
+
+  const getAllSelectionState = (): 'all' | 'some' | 'none' => getCategorySelectionState(results);
 
   const renderIdentityGroup = (title: string, groupData: MigrationAnalysis[], icon: React.ReactNode) => {
     if (groupData.length === 0) return null;

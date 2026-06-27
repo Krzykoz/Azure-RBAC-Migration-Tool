@@ -21,7 +21,7 @@ interface UseExportProps {
 interface UseExportResult {
   showExportMenu: boolean;
   setShowExportMenu: Dispatch<SetStateAction<boolean>>;
-  handleExport: (format: ExportFormat) => boolean;
+  handleExport: (format: ExportFormat) => void;
 }
 
 /** Generates and downloads the selected export format for the chosen identities. */
@@ -38,7 +38,7 @@ export const useExport = ({
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const handleExport = useCallback(
-    (format: ExportFormat): boolean => {
+    (format: ExportFormat): void => {
       // Filter results by selection
       const filteredResults = results.filter((r) =>
         selectedForExport.has(getPolicyKey(r.originalPolicy))
@@ -46,7 +46,7 @@ export const useExport = ({
 
       if (filteredResults.length === 0) {
         alert('Please select at least one identity to export.');
-        return false;
+        return;
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
@@ -87,9 +87,7 @@ export const useExport = ({
           break;
         }
       }
-
       setShowExportMenu(false);
-      return true;
     },
     [
       results,

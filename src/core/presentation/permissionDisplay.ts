@@ -7,7 +7,7 @@ import { RoleBreakdown } from '../types';
  * drift apart.
  */
 
-export type PermissionKind = 'missing' | 'covered' | 'excess';
+type PermissionKind = 'missing' | 'covered' | 'excess';
 
 /** Max permission badges shown before the "+N more" / Show All affordance. */
 export const PERMISSION_VISIBLE_LIMIT = UI_CONSTANTS.PERMISSION_VISIBLE_LIMIT;
@@ -51,7 +51,7 @@ export const roleBreakdownCanExpand = (role: Pick<RoleBreakdown, 'covered' | 'ex
  */
 export type PermissionBadgeVariant = 'missing' | 'covered' | 'excess' | 'excess-priv';
 
-export interface PermissionBadgeDescriptor {
+interface PermissionBadgeDescriptor {
   variant: PermissionBadgeVariant;
   privileged: boolean;
   /** Missing badges show a leading warning icon. */
