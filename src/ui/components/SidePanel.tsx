@@ -34,7 +34,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   );
 
   return (
-    <div className="lg:col-span-3 flex flex-col gap-4">
+    <div className="xl:col-span-3 flex flex-col gap-4">
 
       {/* Subscription Card */}
       <div className="bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm overflow-hidden flex flex-col">

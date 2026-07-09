@@ -318,9 +318,9 @@ const renderIdentityCard = (
 
   return `<div class="id-row" data-row="${rowId}">
       ${identityCol}
-      <div class="col-roles">${tabs}${rolesPanels}</div>
-      <div class="col-coverage">${coveragePanels}</div>
-      <div class="col-gap">${renderCoverageBanner(coverage, rowId)}${gapPanels}</div>
+      <div class="col-roles"><div class="mobile-col-label">Recommended Role Combination</div>${tabs}${rolesPanels}</div>
+      <div class="col-coverage"><div class="mobile-col-label">Coverage</div>${coveragePanels}</div>
+      <div class="col-gap"><div class="mobile-col-label">Gap Analysis</div>${renderCoverageBanner(coverage, rowId)}${gapPanels}</div>
     </div>`;
 };
 
@@ -333,7 +333,7 @@ const renderChart = (data: CoverageChartDatum[]): string => {
   const barW = CHART_BAR_WIDTH;
   const gap = CHART_BAR_GAP;
 
-  const width = leftPad + data.length * band + 20;
+  const width = Math.max(leftPad + data.length * band + 20, 320);
   const height = topPad + plotH + bottomPad;
   const baseY = topPad + plotH;
 
@@ -438,7 +438,6 @@ svg{display:inline-block;vertical-align:middle}
 .ws-meta b{color:var(--text);font-weight:600}
 .ws-body{padding:24px}
 .overview{display:grid;grid-template-columns:3fr 1fr;gap:24px;align-items:stretch;margin-bottom:32px}
-@media(max-width:900px){.overview{grid-template-columns:1fr}}
 .chart-card{background:var(--panel-alt);border:1px solid var(--border);border-radius:4px;padding:16px;height:392px;overflow:hidden}
 .chart-title{margin:0 0 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-soft)}
 .chart-scroll{overflow-x:auto;overflow-y:hidden;height:calc(100% - 28px)}
@@ -452,6 +451,7 @@ svg{display:inline-block;vertical-align:middle}
 .mapping-head,.id-row{display:grid;grid-template-columns:3fr 4fr 2fr 3fr;gap:16px}
 .mapping-head{padding:12px 24px;background:var(--panel-head);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em}
 .mapping-head .mh-right{text-align:right}
+.mobile-col-label{display:none}
 .group-head{display:flex;align-items:center;gap:10px;padding:8px 24px;background:var(--panel-alt);border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em}
 .group-count{opacity:.6}
 .id-row{padding:16px 24px;align-items:start;border-bottom:1px solid var(--divider)}
@@ -541,6 +541,34 @@ html.dark .pv-excess-priv{background:rgba(120,53,15,.6);color:#fde68a;border-col
 .pv-more{font-size:10px;color:var(--text-mute);font-style:italic;padding-left:4px;align-self:center}
 .pv-block.expanded .pv-more{display:none}
 .footer{text-align:center;font-size:11px;color:var(--text-mute);padding:16px 0 4px}
+@media(max-width:1199px){
+  .mapping-head{display:none}
+  .id-row{grid-template-columns:1fr;gap:20px}
+  .col-roles,.col-coverage,.col-gap{min-width:0;border-top:1px solid var(--border);padding-top:16px;text-align:left}
+  .mobile-col-label{display:block;margin-bottom:8px;font-size:10px;font-weight:600;color:var(--text-mute);text-transform:uppercase;letter-spacing:.06em}
+}
+@media(max-width:900px){
+  .overview{grid-template-columns:1fr;gap:16px}
+  .stat-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .stat-card{min-height:96px;padding:16px}
+}
+@media(max-width:639px){
+  .appbar{padding:0 12px}
+  .appbar-left{gap:8px}
+  .appbar-title{font-size:14px}
+  .appbar-div,.appbar-sub{display:none}
+  .container{padding:12px}
+  .ws-head{align-items:flex-start;padding:16px}
+  .ws-head h2,.ws-meta b{overflow-wrap:anywhere}
+  .ws-meta{flex-direction:column;gap:4px}
+  .ws-body{padding:16px}
+  .chart-card{height:340px;padding:12px}
+  .stat-cards{grid-template-columns:1fr}
+  .mapping-title{margin-bottom:12px}
+  .group-head,.id-row{padding-left:16px;padding-right:16px}
+  .id-oid{white-space:normal;word-break:break-all}
+  .id-meta,.role-chip{max-width:100%;overflow-wrap:anywhere}
+}
 `;
 
 const buildScript = (): string => {

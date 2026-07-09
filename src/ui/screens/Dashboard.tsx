@@ -172,11 +172,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   ).length;
 
   return (
-    <div className="max-w-[1600px] mx-auto p-6">
+    <div className="max-w-[1600px] mx-auto p-3 sm:p-4 lg:p-6">
       {/* Breadcrumb Navigation */}
       <nav
         aria-label="Breadcrumb"
-        className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 mb-6"
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-600 dark:text-neutral-400 mb-4 sm:mb-6"
       >
         <button
           onClick={resetToSubscriptions}
@@ -197,7 +197,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span aria-hidden="true">/</span>
             <button
               onClick={resetToVaults}
-              className={`hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-600 rounded px-1 ${selectedVault ? 'text-neutral-900 dark:text-white font-semibold' : ''
+              className={`max-w-full min-w-0 truncate hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-600 rounded px-1 ${selectedVault ? 'text-neutral-900 dark:text-white font-semibold' : ''
                 }`}
             >
               {selectedSub.displayName}
@@ -207,14 +207,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {selectedVault && (
           <>
             <span aria-hidden="true">/</span>
-            <span className="text-neutral-900 dark:text-white font-semibold" aria-current="page">
+            <span className="min-w-0 max-w-full break-all text-neutral-900 dark:text-white font-semibold" aria-current="page">
               {selectedVault.name}
             </span>
           </>
         )}
       </nav>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 items-start">
         {/* Left Column: Selection Panel */}
         <SidePanel
           subscriptions={subscriptions}
@@ -227,19 +227,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
         />
 
         {/* Right Column: Workspace */}
-        <div className="lg:col-span-9 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm min-h-[600px] flex flex-col">
+        <div className="xl:col-span-9 min-w-0 bg-white dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm min-h-[420px] sm:min-h-[600px] flex flex-col">
           {/* Workspace Header */}
-          <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 flex justify-between items-center bg-neutral-50 dark:bg-neutral-800/50">
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+          <div className="px-4 py-4 sm:px-6 border-b border-neutral-200 dark:border-neutral-700 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-between sm:items-center bg-neutral-50 dark:bg-neutral-800/50">
+            <h2 className="min-w-0 break-words text-lg font-semibold text-neutral-900 dark:text-neutral-100">
               {selectedVault ? `Analysis: ${selectedVault.name}` : 'Migration Workspace'}
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
               {/* Export Menu */}
               {status === MigrationStatus.COMPLETE && (
-                <div className="relative" ref={exportMenuRef}>
+                <div className="relative w-full sm:w-auto" ref={exportMenuRef}>
                   <button
                     onClick={() => setShowExportMenu(!showExportMenu)}
-                    className="px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center gap-2 transition-colors"
+                    className="w-full px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 transition-colors sm:w-auto"
                   >
                     <DownloadIcon className="w-4 h-4" /> Export
                   </button>
@@ -261,7 +261,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               {/* Analysis Controls */}
               {selectedVault && (
-                <div className="flex items-center gap-4">
+                <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
                   {/* Custom Role Toggle */}
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <div className="relative">
@@ -295,7 +295,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       status === MigrationStatus.ANALYZING ||
                       status === MigrationStatus.COMPLETE
                     }
-                    className={`px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 ${status === MigrationStatus.COMPLETE
+                    className={`w-full justify-center px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 sm:w-auto ${status === MigrationStatus.COMPLETE
                         ? 'bg-green-600 text-white cursor-default'
                         : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm'
                       }`}
@@ -323,10 +323,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* Workspace Content */}
-          <div className="p-6 flex-1">
+          <div className="min-w-0 p-4 sm:p-6 flex-1">
             {/* Empty State - No Vault Selected */}
             {status === MigrationStatus.IDLE && !selectedVault && (
-              <div className="h-full flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-400">
+              <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 dark:text-neutral-400">
                 <div className="bg-neutral-100 dark:bg-neutral-700/50 p-6 rounded-full mb-4">
                   <ShieldCheckIcon className="w-12 h-12 text-neutral-400 dark:text-neutral-500" />
                 </div>
@@ -361,7 +361,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     RBAC roles (Built-in & Custom) from your subscription to find the best match.
                   </p>
 
-                  <div className="grid grid-cols-3 gap-4 mb-8">
+                  <div className="grid grid-cols-1 gap-3 mb-8 sm:grid-cols-3 sm:gap-4">
                     <div className="p-4 bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-700 rounded">
                       <div className="text-2xl font-light text-brand-600">
                         {selectedVault.accessPolicies.length}

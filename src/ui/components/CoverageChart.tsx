@@ -142,15 +142,15 @@ export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => 
   const stats = coverageOverviewStats(data);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-      <div className="md:col-span-3 bg-neutral-50 dark:bg-neutral-900/30 p-4 rounded border border-neutral-200 dark:border-neutral-700" style={{ height: '392px' }}>
+    <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4">
+      <div className="h-[340px] min-w-0 rounded border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900/30 sm:h-[392px] sm:p-4 lg:col-span-3">
         <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Coverage Distribution</h4>
         <div
           ref={chartScrollRef}
           className="overflow-x-auto overflow-y-hidden h-[calc(100%-24px)]"
         >
-          <div style={{ width: data.length * CHART_BAND + 64, height: '100%', margin: '0 auto' }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: Math.max(data.length * CHART_BAND + 64, 320), height: '100%', margin: '0 auto' }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
                 <XAxis
@@ -195,20 +195,20 @@ export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => 
       </div>
 
 
-      <div className="md:col-span-1 space-y-4">
-        <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-1 lg:grid-cols-1 lg:gap-4">
+        <div className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-[120px]">
           <div className="text-3xl font-light text-neutral-900 dark:text-white">
             {stats.avgCoverage}%
           </div>
           <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Coverage</div>
         </div>
-        <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
+        <div className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-[120px]">
           <div className="text-3xl font-light text-neutral-900 dark:text-white">
             {stats.totalMissing}
           </div>
           <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Missing Permissions</div>
         </div>
-        <div className="bg-white dark:bg-neutral-800 p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-[120px]">
+        <div className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-[120px]">
           <div className="text-3xl font-light text-neutral-900 dark:text-white">
             {stats.totalExcess}
           </div>

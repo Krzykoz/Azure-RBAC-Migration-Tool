@@ -161,7 +161,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
   };
 
   return (
-    <div className="space-y-8 fade-in-up">
+    <div className="min-w-0 space-y-6 fade-in-up sm:space-y-8">
 
       {/* Overview Charts */}
       <CoverageChart data={activeData} theme={theme} />
@@ -169,8 +169,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
       {/* Detailed List */}
       <div>
         <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">Identity Mapping</h3>
-        <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-clip">
-          <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
+        <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-hidden">
+          <div className="hidden 2xl:grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
             <div className="col-span-3 flex items-center gap-4">
               <Checkbox
                 checked={getAllSelectionState() === 'all'}
