@@ -171,6 +171,23 @@ describe('exportToHtml', () => {
         expect(htmlDark).toContain('data-action="theme"');
     });
 
+    it('ships responsive report styles and a scrollable minimum chart width', () => {
+        const html = exportToHtml(
+            [makeAnalysis({ objectId: 'u1' }, [makeRec()])],
+            {},
+            resolved({ u1: { name: 'Alice', type: 'User' } }),
+            'light',
+            'v',
+            's'
+        );
+
+        expect(html).toContain('@media(max-width:1199px)');
+        expect(html).toContain('@media(max-width:639px)');
+        expect(html).toContain('.mapping-head{display:none}');
+        expect(html).toContain('<div class="mobile-col-label">Recommended Role Combination</div>');
+        expect(html).toContain('<svg width="320"');
+    });
+
     it('HTML-escapes dynamic values to avoid broken markup or injection', () => {
         const html = exportToHtml(
             [

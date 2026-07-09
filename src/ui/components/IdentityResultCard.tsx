@@ -78,9 +78,9 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
 
   return (
     <div className="group hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
-      <div className="grid grid-cols-12 gap-4 px-6 py-4 items-start">
+      <div className="grid grid-cols-1 gap-5 px-4 py-4 items-start sm:px-6 2xl:grid-cols-12 2xl:gap-4">
         {/* Identity Column */}
-        <div className="col-span-3 pr-2">
+        <div className="min-w-0 2xl:col-span-3 2xl:pr-2">
           <div className="flex items-start gap-4">
             <Checkbox
               checked={isSelected}
@@ -110,7 +110,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
               {/* Details about Type and AppID if available */}
               <div className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-1 flex flex-col gap-0.5">
                 {hasAppId && (
-                  <span title="Application ID">App ID: {res.originalPolicy.applicationId}</span>
+                  <span className="break-all" title="Application ID">App ID: {res.originalPolicy.applicationId}</span>
                 )}
                 {currentType !== 'Unknown' && (
                   <span className="opacity-75">{currentType}</span>
@@ -170,7 +170,10 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
         </div>
 
         {/* Recommendations Column */}
-        <div className="col-span-4">
+        <div className="min-w-0 border-t border-neutral-200 pt-4 dark:border-neutral-700 2xl:col-span-4 2xl:border-0 2xl:pt-0">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 2xl:hidden">
+            Recommended Role Combination
+          </div>
           {/* Selection Tabs for Strategies */}
           {res.recommendations.length > 0 && (
             <div className={`flex flex-wrap gap-2 mb-3 ${!showRecs ? 'opacity-50 grayscale' : ''}`}>
@@ -195,7 +198,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
           <div className={`flex flex-wrap gap-1.5 mb-2 ${!showRecs ? 'opacity-50' : ''}`}>
             {activeRec.roleNames && activeRec.roleNames.length > 0 ? (
               activeRec.roleNames.map((roleName, rIdx) => (
-                <span key={rIdx} className="inline-flex items-center px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-xs font-medium text-neutral-800 dark:text-neutral-200">
+                <span key={rIdx} className="inline-flex max-w-full items-center break-words px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-xs font-medium text-neutral-800 dark:text-neutral-200">
                   {roleName}
                 </span>
               ))
@@ -210,14 +213,20 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
         </div>
 
         {/* Confidence */}
-        <div className="col-span-2 text-right">
+        <div className="border-t border-neutral-200 pt-4 dark:border-neutral-700 2xl:col-span-2 2xl:border-0 2xl:pt-0 2xl:text-right">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 2xl:hidden">
+            Coverage
+          </div>
           <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${CONFIDENCE_CLASS[confidenceLevel(activeRec.confidence)]}`}>
             {activeRec.confidence}%
           </span>
         </div>
 
         {/* Gaps Analysis */}
-        <div className="col-span-3">
+        <div className="min-w-0 border-t border-neutral-200 pt-4 dark:border-neutral-700 2xl:col-span-3 2xl:border-0 2xl:pt-0">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 2xl:hidden">
+            Gap Analysis
+          </div>
           <div className="flex flex-col gap-1">
             {res.existingCoverage && (
               <CoverageBanner

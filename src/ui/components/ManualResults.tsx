@@ -42,7 +42,7 @@ export const ManualResults: React.FC<{ result: MigrationAnalysis }> = ({ result 
             }`}
           >
             <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold text-neutral-900 dark:text-white">
                   {rec.roleNames.join(' + ')}
                 </span>
@@ -55,7 +55,7 @@ export const ManualResults: React.FC<{ result: MigrationAnalysis }> = ({ result 
               <span className="text-xs text-neutral-500">{rec.strategy}</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="grid grid-cols-1 gap-3 mb-3 sm:grid-cols-3">
               <Metric
                 label="Coverage"
                 value={`${rec.confidence}%`}

@@ -72,10 +72,10 @@ export const ManualModePage: React.FC<ManualModePageProps> = ({ onBack }) => {
   const clearAll = () => setSelected(emptySelection());
 
   return (
-    <div className="min-h-screen flex items-start justify-center p-4 bg-neutral-100 dark:bg-neutral-900">
-      <div className="max-w-6xl w-full bg-white dark:bg-neutral-800 shadow-fluent p-8 rounded-lg border border-neutral-200 dark:border-neutral-700 my-8">
+    <div className="min-h-[calc(100svh-3rem)] flex items-start justify-center p-3 bg-neutral-100 dark:bg-neutral-900 sm:p-4">
+      <div className="my-4 w-full max-w-6xl rounded-lg border border-neutral-200 bg-white p-4 shadow-fluent dark:border-neutral-700 dark:bg-neutral-800 sm:my-8 sm:p-8">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-start gap-3 mb-6 sm:items-center sm:gap-4">
           <button
             onClick={onBack}
             className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-full transition-colors"

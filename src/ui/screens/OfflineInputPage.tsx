@@ -91,9 +91,9 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
   const roleCommand = `az role definition list -o json --query "[?contains(join(',', permissions[].dataActions[]), 'Microsoft.KeyVault')]"`;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-neutral-100 dark:bg-neutral-900">
-      <div className="max-w-4xl w-full bg-white dark:bg-neutral-800 shadow-fluent p-8 rounded-lg border border-neutral-200 dark:border-neutral-700 my-8 flex flex-col max-h-[90vh]">
-        <div className="flex items-center gap-4 mb-6">
+    <div className="min-h-[calc(100svh-3rem)] flex items-start justify-center p-3 bg-neutral-100 dark:bg-neutral-900 sm:items-center sm:p-4">
+      <div className="my-4 w-full max-w-4xl rounded-lg border border-neutral-200 bg-white p-4 shadow-fluent dark:border-neutral-700 dark:bg-neutral-800 sm:my-8 sm:p-8">
+        <div className="flex items-start gap-3 mb-6 sm:items-center sm:gap-4">
           <button
             onClick={onBack}
             className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-full transition-colors"
@@ -111,7 +111,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+        <div className="space-y-6">
           {/* Vault Input */}
           <div>
             <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
@@ -125,7 +125,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
               value={vaultJson}
               onChange={(e) => setVaultJson(e.target.value)}
               placeholder="Paste Access Policies JSON here..."
-              className="w-full h-48 p-3 font-mono text-xs rounded-sm bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 outline-none resize-y"
+              className="w-full h-36 p-3 font-mono text-xs rounded-sm bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 outline-none resize-y sm:h-48"
             />
           </div>
 
@@ -142,7 +142,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
               value={roleJson}
               onChange={(e) => setRoleJson(e.target.value)}
               placeholder="Paste Role Definitions JSON here..."
-              className="w-full h-48 p-3 font-mono text-xs rounded-sm bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 outline-none resize-y"
+              className="w-full h-36 p-3 font-mono text-xs rounded-sm bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 outline-none resize-y sm:h-48"
             />
           </div>
 
@@ -156,7 +156,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
         <div className="pt-6 mt-4 border-t border-neutral-200 dark:border-neutral-700 flex justify-end">
           <button
             onClick={handleStart}
-            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-sm transition-colors flex items-center gap-2 shadow-sm"
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-sm transition-colors flex items-center justify-center gap-2 shadow-sm sm:w-auto"
           >
             <CheckCircleIcon className="w-4 h-4" /> Analyze
           </button>

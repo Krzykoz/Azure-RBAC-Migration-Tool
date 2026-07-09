@@ -63,14 +63,14 @@ export const RoleSourceSelector: React.FC<RoleSourceSelectorProps> = ({
         <span className="text-xs text-neutral-400">{sourceStatus}</span>
       </div>
 
-      <div className="inline-flex flex-wrap gap-1 p-1 rounded-lg bg-neutral-100 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700">
+      <div className="flex w-full flex-wrap gap-1 p-1 rounded-lg bg-neutral-100 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700 sm:inline-flex sm:w-auto">
         {SOURCE_OPTIONS.map(([value, label]) => (
           <button
             key={value}
             type="button"
             aria-pressed={roleSource === value}
             onClick={() => onSelectSource(value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`min-w-0 flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors sm:flex-none sm:whitespace-nowrap ${
               roleSource === value
                 ? 'bg-white dark:bg-neutral-700 text-brand-600 dark:text-white shadow-sm'
                 : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200'

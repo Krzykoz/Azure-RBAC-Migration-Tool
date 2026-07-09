@@ -41,17 +41,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     'az account get-access-token --resource https://graph.microsoft.com -o tsv --query accessToken';
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-neutral-100 dark:bg-neutral-900">
-      <div className="relative max-w-[500px] w-full bg-white dark:bg-neutral-800 shadow-fluent p-8 rounded-lg border border-neutral-200 dark:border-neutral-700 my-8 max-h-[90vh] overflow-y-auto">
+    <div className="min-h-[calc(100svh-3rem)] flex items-start justify-center p-3 bg-neutral-100 dark:bg-neutral-900 sm:items-center sm:p-4">
+      <div className="relative my-4 w-full max-w-[500px] rounded-lg border border-neutral-200 bg-white p-4 shadow-fluent dark:border-neutral-700 dark:bg-neutral-800 sm:my-8 sm:p-8">
         <div className="flex flex-col items-start mb-6">
-          <div className="flex items-center justify-between gap-4 mb-2 w-full">
+          <div className="flex w-full flex-col items-stretch gap-3 mb-2 sm:flex-row sm:items-center sm:justify-between">
             <span className="font-semibold text-lg text-neutral-800 dark:text-neutral-200">
               Migration Assistant
             </span>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
               <button
                 onClick={onManual}
-                className="bg-neutral-700 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 shadow-sm"
+                className="bg-neutral-700 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center justify-center gap-1.5 shadow-sm whitespace-nowrap"
                 aria-label="Use Manual Mode"
               >
                 <ShieldCheckIcon className="w-3.5 h-3.5" />
@@ -59,7 +59,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </button>
               <button
                 onClick={onOffline}
-                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 shadow-sm"
+                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center justify-center gap-1.5 shadow-sm whitespace-nowrap"
                 aria-label="Use Offline Mode"
               >
                 <WifiOffIcon className="w-3.5 h-3.5" />

@@ -25,7 +25,7 @@ export const PermissionPicker: React.FC<PermissionPickerProps> = ({
 }) => {
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
           Select permissions{' '}
           <span className="font-normal text-neutral-500">
