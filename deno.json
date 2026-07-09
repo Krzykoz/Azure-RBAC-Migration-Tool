@@ -1,0 +1,13 @@
+{
+  "desktop": {
+    "app": {
+      "name": "Azure Key Vault RBAC Migrator",
+      "identifier": "io.github.krzykoz.azure-key-vault-rbac-migrator"
+    },
+    "output": {
+      "macos": "./desktop-dist/Azure Key Vault RBAC Migrator.app",
+      "windows": "./desktop-dist/Azure Key Vault RBAC Migrator",
+      "linux": "./desktop-dist/azure-key-vault-rbac-migrator.AppImage"
+    }
+  }
+}

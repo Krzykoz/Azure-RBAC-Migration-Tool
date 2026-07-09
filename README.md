@@ -1,6 +1,6 @@
 # Azure Key Vault RBAC Migrator
 
-A browser‑only tool that helps you migrate Azure Key Vault access policies to modern RBAC role mappings. The app runs entirely in the client, never stores tokens, and provides visual analysis of permissions.
+A self-contained Deno desktop app that helps you migrate Azure Key Vault access policies to modern RBAC role mappings. It also remains usable in a browser. The app runs entirely on the client, never stores tokens, and provides visual analysis of permissions.
 
 ## Overview
 
@@ -17,6 +17,8 @@ A browser‑only tool that helps you migrate Azure Key Vault access policies to 
 
 ## Prerequisites
 
+- [Deno 2.9 or newer](https://docs.deno.com/runtime/getting_started/installation/) for the desktop app.
+- Node.js and npm for installing and building the existing Vite frontend.
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed.
 - Access to Azure subscriptions with Key Vaults.
 - (Optional) Graph permissions to resolve identity names.
@@ -31,19 +33,19 @@ cd Azure-RBAC-Migration-Tool
 # Install dependencies
 npm install
 
-# Run development server
-npm run dev
+# Open the desktop app with hot reload
+npm run desktop:dev
 ```
 
-The app will be available at `http://localhost:3000` (configured in `vite.config.ts`).
+Run `npm run dev` instead to use the browser version at `http://localhost:3000`.
 
-## Build for Production
+## Build the Desktop App
 
 ```bash
-npm run build
+npm run desktop:build
 ```
 
-The production bundle is emitted to the `dist` folder, which is already ignored via `.gitignore`.
+The self-contained application is emitted to `desktop-dist` using the native format for your platform. Run `npm run build` when you only need the browser bundle in `dist`.
 
 ## Usage
 
@@ -179,8 +181,8 @@ ordering, confidence tiers, banner states, icons, chart geometry) through the
 ## Security
 
 - Tokens are kept **in memory only**; never persisted or sent to a server.
-- No backend; all processing occurs client‑side.
-- The app does not transmit any data outside the browser.
+- No remote backend; all processing occurs client‑side.
+- The app only sends tokens and requests to the Azure ARM and Graph endpoints you connect to.
 
 ## Troubleshooting
 
@@ -194,6 +196,7 @@ ordering, confidence tiers, banner states, icons, chart geometry) through the
 - **React 19**
 - **TypeScript**
 - **Vite**
+- **Deno Desktop 2.9+**
 - **Tailwind CSS**
 - **Recharts**
 
