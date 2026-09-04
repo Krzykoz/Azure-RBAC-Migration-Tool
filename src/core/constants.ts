@@ -57,12 +57,7 @@ export const ANALYSIS_STRATEGIES: readonly StrategyConfig[] = [
 ] as const;
 
 export const ANALYSIS_CONSTANTS = {
-  // Max number of roles the search may combine for a single identity.
-  // Key Vault has 4 data-plane categories (keys/secrets/certificates/storage), so 4 is
-  // enough to cover any policy even with single-category roles, while keeping the exhaustive
-  // subset search bounded (the score also penalizes role count, so larger combos are never optimal).
-  MAX_COMBINATION_SIZE: 4,
-  GRAPH_BATCH_SIZE: 20,
+  GRAPH_BATCH_SIZE: 1000,
   VAULT_CONCURRENCY_LIMIT: 5,
 } as const;
 
@@ -80,10 +75,3 @@ export const IDENTITY_TYPE_ORDER = [
   'User',
   'Unknown',
 ] as const;
-
-/** Strategy priority for tie-breaking equal-confidence recommendations. */
-export const STRATEGY_PRIORITY: Record<string, number> = {
-  'Minimize Excess': 3,
-  'Balanced': 2,
-  'Max Coverage': 1,
-};

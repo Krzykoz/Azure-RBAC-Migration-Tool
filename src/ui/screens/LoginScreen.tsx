@@ -78,7 +78,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         <div className="space-y-6">
           {/* ARM Token Section */}
           <div>
-            <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
+            <label htmlFor="management-token" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
               1. Management Token <span className="text-red-500">*</span>
             </label>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
@@ -86,6 +86,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </p>
             <CopyableCommand command={armCommand} commandId="arm" />
             <textarea
+              id="management-token"
+              spellCheck={false}
               value={armToken}
               onChange={(e) => setArmToken(e.target.value)}
               placeholder="Paste Management token..."
@@ -95,7 +97,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
           {/* Graph Token Section */}
           <div>
-            <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
+            <label htmlFor="graph-token" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
               2. Graph Token <span className="text-neutral-400 font-normal">(Optional)</span>
             </label>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
@@ -103,6 +105,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </p>
             <CopyableCommand command={graphCommand} commandId="graph" />
             <textarea
+              id="graph-token"
+              spellCheck={false}
               value={graphToken}
               onChange={(e) => setGraphToken(e.target.value)}
               placeholder="Paste Graph token..."
@@ -111,7 +115,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
 
           {error && (
-            <p className="text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900">
+            <p role="alert" className="text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900">
               {error}
             </p>
           )}

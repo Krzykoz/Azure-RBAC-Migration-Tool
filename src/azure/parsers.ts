@@ -11,9 +11,9 @@ interface KeyVaultProperties {
   accessPolicies?: Array<{
     tenantId: string;
     objectId: string;
-    applicationId?: string;
-    displayName?: string;
-    permissions?: Record<string, string[]>;
+    applicationId?: string | null;
+    displayName?: string | null;
+    permissions?: Record<string, string[] | null>;
   }>;
 }
 
@@ -24,37 +24,80 @@ export interface KeyVaultResponse {
   properties: KeyVaultProperties;
 }
 
+const requireObject = (value: unknown, field: string): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${field} must be an object.`);
+  }
+  return value as Record<string, unknown>;
+};
+
+const requireString = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${field} must be a nonempty string.`);
+  }
+  return value;
+};
+
 export const parseKeyVaultResponse = (
-  vaultData: KeyVaultResponse,
+  input: unknown,
   principalTypeCache: Record<string, IdentityType>
 ): KeyVault => {
+  const vaultData = requireObject(input, 'Key Vault');
+  const id = requireString(vaultData.id, 'Key Vault id');
+  const name = requireString(vaultData.name, 'Key Vault name');
+  const location = requireString(vaultData.location, `Key Vault "${name}" location`);
+  const properties = requireObject(vaultData.properties, `Key Vault "${name}" properties`);
+  const sku = properties.sku === undefined
+    ? 'Unknown'
+    : requireString(requireObject(properties.sku, 'Key Vault sku').name, 'Key Vault sku.name');
+  const policies = properties.accessPolicies === undefined ? [] : properties.accessPolicies;
+  if (!Array.isArray(policies)) {
+    throw new Error(`Key Vault "${name}" accessPolicies must be an array.`);
+  }
+
   return {
-    id: vaultData.id,
-    name: vaultData.name,
-    location: vaultData.location,
-    sku: vaultData.properties.sku?.name || 'Unknown',
-    accessPolicies: (vaultData.properties.accessPolicies || []).map((ap) => {
+    id,
+    name,
+    location,
+    sku,
+    accessPolicies: policies.map((policy: unknown, index) => {
+      const field = `Key Vault "${name}" accessPolicies[${index}]`;
+      const ap = requireObject(policy, field);
+      const tenantId = requireString(ap.tenantId, `${field}.tenantId`);
+      const objectId = requireString(ap.objectId, `${field}.objectId`);
+      const applicationId = ap.applicationId == null
+        ? undefined
+        : requireString(ap.applicationId, `${field}.applicationId`);
+      const displayName = ap.displayName == null
+        ? undefined
+        : requireString(ap.displayName, `${field}.displayName`);
       let type: IdentityType = 'Unknown';
 
       // 1. Infer from Access Policy data (if applicationId is present, it's an app/SP)
-      if (ap.applicationId) {
+      if (applicationId) {
         type = 'Application';
       }
       // 2. Infer from Role Assignment Cache (high hit rate for users/groups)
-      else if (principalTypeCache[ap.objectId]) {
-        type = principalTypeCache[ap.objectId];
+      else if (Object.hasOwn(principalTypeCache, objectId)) {
+        type = principalTypeCache[objectId];
       }
 
       // Note: ap.displayName might not exist in standard ARM response,
       // but we check for it just in case the API version or proxy adds it.
 
-      const rawPermissions = ap.permissions || {};
+      const rawPermissions = requireObject(ap.permissions, `${field}.permissions`);
       const expandedPermissions: Record<string, string[]> = {};
 
       // Expand "all" to full list (minus Purge) here at the parsing level
       Object.entries(rawPermissions).forEach(([category, perms]) => {
         const normalizedCategory = category.toLowerCase();
-        if (!perms) return;
+        if (!Object.hasOwn(LEGACY_KEY_VAULT_PERMISSIONS, normalizedCategory)) {
+          throw new Error(`${field}.permissions has an unknown category "${category}".`);
+        }
+        if (perms === null) return;
+        if (!Array.isArray(perms) || perms.some((p) => typeof p !== 'string' || !p.trim())) {
+          throw new Error(`${field}.permissions.${category} must be an array of nonempty strings.`);
+        }
 
         // Helper to find standard casing if possible
         const canonicalPerms = LEGACY_KEY_VAULT_PERMISSIONS[normalizedCategory] || [];
@@ -82,15 +125,15 @@ export const parseKeyVaultResponse = (
       });
 
       return {
-        tenantId: ap.tenantId,
-        objectId: ap.objectId,
-        applicationId: ap.applicationId,
-        displayName: ap.displayName || undefined,
+        tenantId,
+        objectId,
+        applicationId,
+        displayName,
         type: type,
         permissions: expandedPermissions,
       };
     }),
-  } as KeyVault;
+  };
 };
 
 export interface SubscriptionResponse {

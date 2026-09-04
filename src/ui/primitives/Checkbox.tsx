@@ -2,6 +2,7 @@ import React from 'react';
 
 interface CheckboxProps {
   checked: boolean;
+  label: string;
   indeterminate?: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
@@ -11,6 +12,7 @@ interface CheckboxProps {
 /** Custom checkbox with support for the indeterminate state. */
 export const Checkbox: React.FC<CheckboxProps> = ({
   checked,
+  label,
   indeterminate,
   onChange,
   disabled,
@@ -19,6 +21,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   <button
     type="button"
     role="checkbox"
+    aria-label={label}
     aria-checked={indeterminate ? 'mixed' : checked}
     disabled={disabled}
     onClick={() => onChange(!checked)}

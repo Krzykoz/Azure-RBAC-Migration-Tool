@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createPermissionCatalog } from '../permissionCatalog';
-import { analyzePolicies } from '../engine';
+import { analyzePolicies, analyzeExistingCoverage } from '../engine';
 import { ANALYSIS_STRATEGIES } from '../../constants';
 import { runWeightedAnalysis } from '../strategies';
-import { makePolicy, makeRole } from '../../../testing/factories';
+import { makeAssignment, makePolicy, makeRole } from '../../../testing/factories';
 
 // A tiny self-contained mapping CSV, independent of the bundled asset. This is
 // the payoff of the DI refactor: the engine can be exercised against a catalog
@@ -42,9 +42,35 @@ describe('createPermissionCatalog — injected mapping', () => {
     expect(catalog.hasKnownActionLower('microsoft.keyvault/secrets/get')).toBe(true);
     expect(catalog.hasKnownActionLower('microsoft.keyvault/unknown/thing')).toBe(false);
   });
+
+  it('rejects unknown categories and non-array permissions', () => {
+    expect(() => catalog.getRequiredActions(JSON.parse('{"permissions":{"unknown":["Get"]}}')))
+      .toThrow(/Unsupported permission category/);
+    expect(() => catalog.getRequiredActions(JSON.parse('{"permissions":{"secrets":"Get"}}')))
+      .toThrow(/must be an array/);
+  });
 });
 
 describe('engine with injected catalog', () => {
+  it('counts case variants as one required action across all coverage entrypoints', () => {
+    const action = 'Microsoft.KeyVault/vaults/secrets/getSecret/action';
+    const caseCatalog = createPermissionCatalog(
+      `AccessPolicyPermission,RBACDataAction\nSecret Get,${action}\nSecret List,${action.toLowerCase()}`
+    );
+    const policy = makePolicy({ secrets: ['Get', 'List'] });
+    const roles = [makeRole('Wildcard', ['*'])];
+    const [analysis] = analyzePolicies([policy], roles, caseCatalog);
+    expect(analysis.recommendations[0].confidence).toBe(100);
+    expect(analysis.recommendations[0].missingPermissions).toEqual([]);
+    expect(analysis.recommendations[0].coveredPermissions).toHaveLength(1);
+    expect(analyzeExistingCoverage(
+      policy, [makeAssignment(policy.objectId, 'Wildcard', '/vaults/v')], roles, '/vaults/v', caseCatalog
+    ).isFullyCovered).toBe(true);
+    expect(runWeightedAnalysis(
+      new Set([action, action.toLowerCase()]), roles, ANALYSIS_STRATEGIES[0], caseCatalog
+    ).confidence).toBe(100);
+  });
+
   it('drives analyzePolicies entirely from the custom catalog', () => {
     const role = makeRole('Mini Secrets', [
       'microsoft.keyvault/secrets/get',

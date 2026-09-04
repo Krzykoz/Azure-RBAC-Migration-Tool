@@ -1,6 +1,6 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { MigrationAnalysis, IdentityType } from '../../core/types';
-import { exportToCSV, exportToJSON, exportToPowerShell } from '../../core/export/tabular';
+import { exportToCSV, exportToJSON, exportToPowerShell, parseVaultResourceId } from '../../core/export/tabular';
 import { exportToHtml } from '../../core/export/html';
 import { downloadFile } from '../../core/export/download';
 import { getPolicyKey } from '../../core/identity/policyKey';
@@ -47,6 +47,15 @@ export const useExport = ({
       if (filteredResults.length === 0) {
         alert('Please select at least one identity to export.');
         return;
+      }
+
+      if (format === 'powershell') {
+        try {
+          parseVaultResourceId(vaultResourceId);
+        } catch (error) {
+          alert(error instanceof Error ? error.message : 'A valid target vault resource ID is required.');
+          return;
+        }
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);

@@ -23,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({ user, organization, onLogout, th
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <button
           onClick={onToggleTheme}
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           className="h-8 w-8 shrink-0 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-300 transition-colors"
           title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
         >
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({ user, organization, onLogout, th
             </div>
             <button
               onClick={onLogout}
+              aria-label="Sign out"
               className="h-8 w-8 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center text-xs font-bold transition-colors ring-2 ring-transparent hover:ring-white/20"
               title="Sign out"
             >

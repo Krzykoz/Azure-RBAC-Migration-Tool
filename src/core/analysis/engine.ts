@@ -11,11 +11,6 @@ import { defaultPermissionCatalog, PermissionCatalog } from './permissionCatalog
 import { calculateCoverage } from './coverage';
 import { runWeightedAnalysis } from './strategies';
 
-const isKeyVaultRole = (role: RoleDefinition): boolean =>
-  role.properties.permissions.some((p) =>
-    p.dataActions.some((da) => da.toLowerCase().includes('microsoft.keyvault'))
-  );
-
 /**
  * Collapse strategies that resolved to the same role set into a single
  * recommendation, labelling it with all the contributing strategy names
@@ -25,15 +20,15 @@ const mergeDuplicateStrategies = (strategies: SuggestedRole[]): SuggestedRole[] 
   const groupsBySignature = new Map<string, SuggestedRole[]>();
 
   strategies.forEach((strategy) => {
-    const signature = [...strategy.roleNames].sort().join(',');
+    const signature = JSON.stringify([...strategy.roleNames].sort());
     const group = groupsBySignature.get(signature);
     if (group) group.push(strategy);
     else groupsBySignature.set(signature, [strategy]);
   });
 
   const uniqueStrategies: SuggestedRole[] = [];
-  groupsBySignature.forEach((group, signature) => {
-    if (group.length > 1 && signature !== '') {
+  groupsBySignature.forEach((group) => {
+    if (group.length > 1 && group[0].roleNames.length > 0) {
       uniqueStrategies.push({
         ...group[0],
         strategy: group.map((s) => s.strategy).join(' / '),
@@ -56,12 +51,10 @@ export const analyzePolicies = (
   availableRoles: RoleDefinition[],
   catalog: PermissionCatalog = defaultPermissionCatalog
 ): MigrationAnalysis[] => {
-  const kvRoles = availableRoles.filter(isKeyVaultRole);
-
   return policies.map((policy) => {
     const requiredActions = catalog.getRequiredActions(policy);
     const allRecommendations = ANALYSIS_STRATEGIES.map((strategy) =>
-      runWeightedAnalysis(requiredActions, kvRoles, strategy, catalog)
+      runWeightedAnalysis(requiredActions, availableRoles, strategy, catalog)
     );
 
     return {
@@ -85,11 +78,12 @@ export const analyzeExistingCoverage = (
   const requiredActions = catalog.getRequiredActions(policy);
 
   const userAssignments = assignments.filter((a) => {
-    if (a.properties.principalId !== policy.objectId) return false;
+    if (a.properties.principalId.toLowerCase() !== policy.objectId.toLowerCase()) return false;
     if (!scopeFilter) return true;
 
     const scope = (a.properties.scope || '').toLowerCase();
     const target = scopeFilter.toLowerCase();
+    if (!scope) return false;
 
     // RBAC inherits downward: an assignment applies to the vault if scoped to the
     // vault itself OR to any ancestor (root / subscription / resource group).
@@ -107,10 +101,10 @@ export const analyzeExistingCoverage = (
   userAssignments.forEach((assignment) => {
     // roleDefinitionId is a full path (".../roleDefinitions/GUID") or a bare GUID.
     const roleDefId = assignment.properties.roleDefinitionId.split('/').pop();
-    const roleDef = availableRoles.find((r) => r.name === roleDefId);
-    if (!roleDef || processedRoles.has(roleDef.properties.roleName)) return;
+    const roleDef = availableRoles.find((r) => r.name.toLowerCase() === roleDefId?.toLowerCase());
+    if (!roleDef || processedRoles.has(roleDef.name.toLowerCase())) return;
 
-    processedRoles.add(roleDef.properties.roleName);
+    processedRoles.add(roleDef.name.toLowerCase());
     const { covered: c, excess: e } = calculateCoverage(requiredActions, roleDef, catalog);
 
     c.forEach((perm) => covered.add(perm));

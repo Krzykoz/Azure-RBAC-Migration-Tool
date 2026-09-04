@@ -75,12 +75,21 @@ const expandRequiredActions = (map: PermissionMap, policy: AccessPolicyEntry): S
   const actions = new Set<string>();
 
   Object.entries(policy.permissions).forEach(([resourceType, perms]) => {
-    if (!perms || !Array.isArray(perms)) return;
+    if (perms === undefined) return;
+    if (!Array.isArray(perms)) {
+      throw new Error(`Permissions for ${resourceType} must be an array of strings.`);
+    }
 
-    const categoryMap = map[resourceType.toLowerCase()];
-    if (!categoryMap) return;
+    const category = resourceType.toLowerCase();
+    if (!Object.hasOwn(map, category)) {
+      throw new Error(`Unsupported permission category: ${resourceType}.`);
+    }
+    const categoryMap = map[category];
 
     perms.forEach((perm) => {
+      if (typeof perm !== 'string') {
+        throw new Error(`Permissions for ${resourceType} must be an array of strings.`);
+      }
       const verb = perm.toLowerCase();
       // "all"/"*" grants every mapped action in the category.
       if (verb === 'all' || verb === '*') {
@@ -88,12 +97,15 @@ const expandRequiredActions = (map: PermissionMap, policy: AccessPolicyEntry): S
           rbacList.forEach((action) => actions.add(action))
         );
       } else {
-        categoryMap[verb]?.forEach((action) => actions.add(action));
+        if (!Object.hasOwn(categoryMap, verb)) {
+          throw new Error(`Unsupported permission: ${resourceType}/${perm}. Update the permission mapping before migrating.`);
+        }
+        categoryMap[verb].forEach((action) => actions.add(action));
       }
     });
   });
 
-  return actions;
+  return new Set(new Map(Array.from(actions, (action) => [action.toLowerCase(), action])).values());
 };
 
 /** Build a {@link PermissionCatalog} from raw CSV content. Pure: no module state. */

@@ -73,6 +73,91 @@ describe('parseKeyVaultResponse — "All" expansion', () => {
   });
 });
 
+describe('parseKeyVaultResponse — boundary validation', () => {
+  it.each([
+    ['id', 123],
+    ['id', ''],
+    ['name', ' '],
+    ['name', {}],
+    ['location', null],
+    ['properties', []],
+  ])('rejects an invalid vault %s (%j)', (field, value) => {
+    expect(() => parseKeyVaultResponse({ ...vault([]), [field]: value }, {})).toThrow(field);
+  });
+
+  it.each([null, [], 'not a vault'])('rejects non-object input %j', (value) => {
+    expect(() => parseKeyVaultResponse(value, {})).toThrow('Key Vault must be an object');
+  });
+
+  it.each([
+    ['tenantId', undefined],
+    ['tenantId', null],
+    ['objectId', 123],
+    ['objectId', ' '],
+    ['objectId', null],
+    ['applicationId', 123],
+    ['applicationId', ''],
+    ['displayName', {}],
+    ['displayName', false],
+    ['permissions', undefined],
+    ['permissions', []],
+    ['permissions', null],
+    ['permissions', { secrets: 'Get' }],
+    ['permissions', { keys: 0 }],
+    ['permissions', { keys: ['Get', 123] }],
+    ['permissions', { certificates: [null] }],
+    ['permissions', { storage: [''] }],
+    ['permissions', { unknown: ['all'] }],
+  ])('rejects an invalid policy %s (%j)', (field, value) => {
+    const policy = { tenantId: 't', objectId: 'o', permissions: {}, [field]: value };
+    expect(() => parseKeyVaultResponse({
+      ...vault([]), properties: { accessPolicies: [policy] },
+    }, {})).toThrow(new RegExp(`accessPolicies\\[0\\].*${field}`));
+  });
+
+  it.each([{}, null, 'policies'])('rejects a non-array policy list %j', (accessPolicies) => {
+    expect(() => parseKeyVaultResponse({
+      ...vault([]), properties: { accessPolicies },
+    }, {})).toThrow('accessPolicies must be an array');
+  });
+
+  it('accepts simple offline identifiers, empty permissions, and omitted optional fields', () => {
+    expect(parseKeyVaultResponse(
+      vault([{ tenantId: 'tenant', objectId: 'simple-id', permissions: {} }]), {}
+    ).accessPolicies[0]).toMatchObject({ objectId: 'simple-id', permissions: {}, type: 'Unknown' });
+    expect(parseKeyVaultResponse({ ...vault([]), properties: {} }, {})).toMatchObject({
+      sku: 'Unknown', accessPolicies: [],
+    });
+  });
+
+  it.each([
+    { secrets: ['Get'], expected: ['Get'] },
+    { secrets: ['all'], expected: ['Get', 'List', 'Set', 'Delete', 'Recover', 'Backup', 'Restore'] },
+  ])('accepts CLI null optional fields and unused categories with $secrets', ({ secrets, expected }) => {
+    const parsed = parseKeyVaultResponse({
+      ...vault([]),
+      properties: {
+        accessPolicies: [{
+          tenantId: 'tenant',
+          objectId: 'principal',
+          applicationId: null,
+          displayName: null,
+          permissions: { keys: null, secrets, certificates: null, storage: null },
+        }],
+      },
+    }, { principal: 'Group' });
+
+    expect(parsed.accessPolicies[0]).toEqual({
+      tenantId: 'tenant',
+      objectId: 'principal',
+      applicationId: undefined,
+      displayName: undefined,
+      type: 'Group',
+      permissions: { secrets: expected },
+    });
+  });
+});
+
 describe('parsePrincipalTypes', () => {
   it('builds a principalId → type cache', () => {
     const cache = parsePrincipalTypes({

@@ -54,6 +54,7 @@ export const PermissionPicker: React.FC<PermissionPickerProps> = ({
             >
               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-neutral-200 dark:border-neutral-700">
                 <Checkbox
+                  label={`Select all ${CATEGORY_LABELS[cat]} permissions`}
                   checked={allSelected}
                   indeterminate={partiallySelected}
                   onChange={() => onToggleCategoryAll(cat)}
@@ -72,6 +73,7 @@ export const PermissionPicker: React.FC<PermissionPickerProps> = ({
                     className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700 dark:text-neutral-300 select-none"
                   >
                     <Checkbox
+                      label={`${CATEGORY_LABELS[cat]}: ${perm}`}
                       checked={selected[cat].has(perm)}
                       onChange={() => onTogglePermission(cat, perm)}
                     />

@@ -1,6 +1,6 @@
 # Azure Key Vault RBAC Migrator
 
-A browser‑only tool that helps you migrate Azure Key Vault access policies to modern RBAC role mappings. The app runs entirely in the client, never stores tokens, and provides visual analysis of permissions.
+A browser‑only tool that helps you migrate Azure Key Vault access policies to modern RBAC role mappings. The app runs entirely in the client, keeps tokens in memory only, and provides visual analysis of permissions.
 
 ## Overview
 
@@ -63,6 +63,24 @@ The production bundle is emitted to the `dist` folder, which is already ignored 
    identities, object IDs, App IDs, suggested roles per strategy, confidence, and
    covered/missing/excess permissions – with a built‑in light/dark toggle.
 
+### Migration safeguards
+
+- Compound identities (`objectId` plus `applicationId`) need manual review: an RBAC
+  assignment cannot preserve the application restriction. PowerShell export skips
+  them, while reports retain their details and a warning.
+- PowerShell export also skips identities already covered by the direct-principal
+  assignments that were loaded. It selects the target subscription and stops on
+  errors; it does not switch the vault's authorization model.
+- Existing coverage is not a complete effective-access assessment. Group membership,
+  management-group inheritance, deny assignments, and conditional access are not
+  evaluated. Verify effective access before changing a production vault.
+- Unmapped permissions and required Azure data-fetch failures stop analysis rather
+  than being interpreted as missing or fully covered data.
+- In Offline Mode, full vault JSON supplies its target resource ID. For policy-only
+  JSON, optionally enter the real **Target vault resource ID** before analysis.
+  Without a real target, analysis and data reports work, but PowerShell export is
+  blocked. Resource ID validation checks syntax, not whether the vault exists.
+
 ## Manual / Interactive Mode
 
 Manual Mode lets you pick Key Vault permissions by hand and see matching RBAC
@@ -118,52 +136,6 @@ The codebase is split into three layers: a framework‑agnostic **core** (domain
 types, analysis engine, presentation rules, exporters), a thin **azure** API
 layer (fetch + response parsing), and the React **ui/app** layer on top.
 
-```
-src/
-├─ main.tsx                     # Entry point
-├─ styles.css                   # Tailwind theme tokens + animations
-├─ app/                         # Application shell
-│   ├─ App.tsx                  # Root component / view switching
-│   ├─ theme.ts                 # Light/dark theme resolution + persistence
-│   └─ ErrorBoundary.tsx
-├─ core/                        # Framework-agnostic domain logic (no React)
-│   ├─ types.ts                 # Domain model
-│   ├─ constants.ts             # API versions, strategy weights, UI constants
-│   ├─ analysis/                # The role-mapping engine
-│   │   ├─ permissionCatalog.ts # Legacy verb → RBAC action mapping (CSV-backed)
-│   │   ├─ actionMatching.ts    # Wildcard-aware data-action matching
-│   │   ├─ coverage.ts          # Per-role covered/excess computation
-│   │   ├─ strategies.ts        # Weighted combination search per strategy
-│   │   ├─ engine.ts            # analyzePolicies / analyzeExistingCoverage
-│   │   └─ index.ts             # Facade bound to the default catalog
-│   ├─ identity/                # Identity interpretation & grouping
-│   │   ├─ identity.ts          # Compound detection, names, icon kinds
-│   │   ├─ grouping.ts          # Type buckets, display sections, chart data
-│   │   └─ policyKey.ts         # Stable composite row key
-│   ├─ permissions/             # Legacy permission catalog & categories
-│   ├─ roles/                   # Role-definition normalization + bundled roles
-│   ├─ presentation/            # Shared display decisions (badges, charts, …)
-│   ├─ export/                  # CSV/JSON/PowerShell + self-contained HTML report
-│   └─ token/jwt.ts             # JWT claim extraction (name, tenant)
-├─ azure/                       # Azure API layer
-│   ├─ client.ts                # ARM/Graph fetch helpers, paging, batching
-│   └─ parsers.ts               # Raw response → domain types
-├─ ui/                          # React UI
-│   ├─ icons.tsx                # Inline icon set
-│   ├─ primitives/              # Checkbox, CopyableCommand
-│   ├─ hooks/                   # useAzureData, useAnalysis, useExport, …
-│   ├─ components/              # Workspace components (results, charts, …)
-│   └─ screens/                 # LoginScreen, Dashboard, OfflineInputPage,
-│                               # ManualModePage
-├─ assets/
-│   ├─ accessPolicyRbacMapping.csv   # Legacy permission → RBAC data action map
-│   └─ builtInKeyVaultRoles.json     # Bundled built-in roles (see update-roles)
-└─ testing/factories.ts         # Shared test factories
-
-scripts/
-└─ update-builtin-roles.mjs     # Regenerates builtInKeyVaultRoles.json (npm run update-roles)
-```
-
 The HTML export and the live React view share every *decision* (permission
 ordering, confidence tiers, banner states, icons, chart geometry) through the
 `core/presentation` helpers, so the two renderings cannot drift apart.
@@ -172,15 +144,21 @@ ordering, confidence tiers, banner states, icons, chart geometry) through the
 
 1. **Data fetching** – Retrieves subscriptions, vaults, role definitions, and access policies via Azure ARM APIs.
 2. **Mapping** – Loads `accessPolicyRbacMapping.csv` to map legacy permissions to RBAC data actions.
-3. **Analysis** – Runs three greedy algorithms to propose optimal role sets.
+3. **Analysis** – Runs three weighted greedy searches, deduplicating equivalent
+   candidates. Each added role must cover another required action, so combinations
+   are not capped at four roles and exhaustive subset enumeration is avoided.
+   These are heuristics, not guarantees of globally optimal role sets.
 4. **Scoring** – Confidence reflects how much of the policy a role set covers; excess permissions are reported separately so you can review over-grants.
 5. **Presentation** – Visual breakdowns with charts, tooltips, and export options.
 
 ## Security
 
-- Tokens are kept **in memory only**; never persisted or sent to a server.
-- No backend; all processing occurs client‑side.
-- The app does not transmit any data outside the browser.
+- Tokens are kept **in memory only**, not persisted to browser storage.
+- Online mode sends the Management token to Azure Resource Manager and the optional
+  Graph token to Microsoft Graph. Identity lookups send the requested identifiers
+  to Graph. There is no application backend or telemetry endpoint.
+- Analysis and export generation run locally. Offline inputs and bundled-role
+  manual analysis do not make Azure requests.
 
 ## Troubleshooting
 

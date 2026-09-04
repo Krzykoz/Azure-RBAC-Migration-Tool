@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { KeyVault, RoleDefinition } from '../../core/types';
 import { parseKeyVaultResponse, KeyVaultResponse } from '../../azure/parsers';
 import { normalizeRoleDefinitions } from '../../core/roles/normalization';
+import { defaultPermissionCatalog } from '../../core/analysis/permissionCatalog';
+import { parseVaultResourceId } from '../../core/export/tabular';
 import { ArrowLeftIcon, CheckCircleIcon } from '../icons';
 import { CopyableCommand } from '../primitives/CopyableCommand';
 
@@ -16,6 +18,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
 }) => {
   const [vaultJson, setVaultJson] = useState('');
   const [roleJson, setRoleJson] = useState('');
+  const [targetResourceId, setTargetResourceId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const handleStart = () => {
@@ -28,6 +31,8 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
 
       const parsedVaultsRaw = JSON.parse(vaultJson);
       const parsedRolesRaw = JSON.parse(roleJson);
+      const target = targetResourceId.trim();
+      if (target) parseVaultResourceId(target);
 
       let vaultList: KeyVaultResponse[] = [];
 
@@ -38,7 +43,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
         parsedVaultsRaw.objectId
       ) {
         // Single Access Policy Object
-        vaultList = [createOfflineVault([parsedVaultsRaw])];
+        vaultList = [createOfflineVault([parsedVaultsRaw], target)];
       } else if (
         Array.isArray(parsedVaultsRaw) &&
         parsedVaultsRaw.length > 0 &&
@@ -46,7 +51,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
         parsedVaultsRaw[0].objectId
       ) {
         // List of Access Policies
-        vaultList = [createOfflineVault(parsedVaultsRaw)];
+        vaultList = [createOfflineVault(parsedVaultsRaw, target)];
       } else if (parsedVaultsRaw.value && Array.isArray(parsedVaultsRaw.value)) {
         // Standard Key Vault List Response
         vaultList = parsedVaultsRaw.value;
@@ -79,10 +84,11 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
       }
 
       const vaults = vaultList.map((v) => parseKeyVaultResponse(v, {}));
+      vaults.forEach((vault) => vault.accessPolicies.forEach((policy) => defaultPermissionCatalog.getRequiredActions(policy)));
       onStart(vaults, roleList);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setError('Invalid JSON: ' + e.message);
+      setError(e instanceof Error ? e.message : 'Unable to read the supplied data.');
     }
   };
 
@@ -114,7 +120,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
         <div className="space-y-6">
           {/* Vault Input */}
           <div>
-            <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
+            <label htmlFor="offline-policies" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
               1. Access Policies JSON <span className="text-red-500">*</span>
             </label>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
@@ -122,6 +128,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
             </p>
             <CopyableCommand command={vaultCommand} commandId="vault" />
             <textarea
+              id="offline-policies"
               value={vaultJson}
               onChange={(e) => setVaultJson(e.target.value)}
               placeholder="Paste Access Policies JSON here..."
@@ -131,7 +138,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
 
           {/* Role Input */}
           <div>
-            <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
+            <label htmlFor="offline-roles" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
               2. Role Definitions JSON <span className="text-red-500">*</span>
             </label>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
@@ -139,6 +146,7 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
             </p>
             <CopyableCommand command={roleCommand} commandId="role" />
             <textarea
+              id="offline-roles"
               value={roleJson}
               onChange={(e) => setRoleJson(e.target.value)}
               placeholder="Paste Role Definitions JSON here..."
@@ -146,8 +154,26 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
             />
           </div>
 
+          <div>
+            <label htmlFor="offline-target" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-1.5">
+              Target vault resource ID (optional)
+            </label>
+            <input
+              id="offline-target"
+              value={targetResourceId}
+              onChange={(event) => setTargetResourceId(event.target.value)}
+              placeholder="/subscriptions/<guid>/resourceGroups/<group>/providers/Microsoft.KeyVault/vaults/<name>"
+              className="w-full p-3 font-mono text-xs rounded-sm bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 focus:ring-1 focus:ring-brand-600"
+              aria-describedby="offline-target-help"
+            />
+            <p id="offline-target-help" className="mt-2 text-xs text-neutral-700 dark:text-neutral-300">
+              For policy-only input, provide the real vault ID to enable PowerShell export.
+              Analysis and data reports work without it. Full vault JSON already includes its target.
+            </p>
+          </div>
+
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 text-sm font-medium border border-red-200 dark:border-red-900 rounded">
+            <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 text-sm font-medium border border-red-200 dark:border-red-900 rounded">
               {error}
             </div>
           )}
@@ -168,10 +194,13 @@ export const OfflineInputPage: React.FC<OfflineInputPageProps> = ({
 
 // Wraps standalone access policies in a synthetic vault so the normal
 // analysis pipeline can consume them.
-function createOfflineVault(accessPolicies: any[]): KeyVaultResponse {
+function createOfflineVault(
+  accessPolicies: NonNullable<KeyVaultResponse['properties']['accessPolicies']>,
+  resourceId: string
+): KeyVaultResponse {
   return {
-    id: '/subscriptions/offline-sub/resourceGroups/offline-rg/providers/Microsoft.KeyVault/vaults/Offline-Vault-Input',
-    name: 'Offline-Vault-Input',
+    id: resourceId || '/subscriptions/offline-sub/resourceGroups/offline-rg/providers/Microsoft.KeyVault/vaults/Offline-Vault-Input',
+    name: resourceId ? parseVaultResourceId(resourceId).vaultName : 'Offline-Vault-Input',
     location: 'unknown',
     properties: {
       sku: { name: 'standard' },

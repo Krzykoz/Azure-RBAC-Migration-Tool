@@ -41,6 +41,10 @@ const toRoleArray = (input: unknown): any[] => {
 
 const normalizeSingleRole = (raw: any): RoleDefinition | null => {
   if (!raw || typeof raw !== 'object') return null;
+  if (
+    (raw.id != null && typeof raw.id !== 'string') ||
+    (raw.name != null && typeof raw.name !== 'string')
+  ) return null;
 
   // ARM/REST shape already nests under `.properties`.
   // Flat Azure CLI shape exposes roleName/roleType/permissions at the top level.
