@@ -7,7 +7,7 @@ import {
   IdentityType,
 } from '../../core/types';
 import { analyzePolicies, analyzeExistingCoverage } from '../../core/analysis/engine';
-import { STRATEGY_PRIORITY } from '../../core/constants';
+import { pickRecommendedIndex } from '../../core/presentation/recommendationPicker';
 import { getPolicyKey } from '../../core/identity/policyKey';
 import { resolveIdentityType } from '../../core/identity/identity';
 
@@ -25,39 +25,9 @@ interface UseAnalysisResult {
   setSelectedRoles: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   selectedForExport: Set<string>;
   setSelectedForExport: React.Dispatch<React.SetStateAction<Set<string>>>;
-  runAnalysis: () => Promise<void>;
+  runAnalysis: () => void;
   clearResults: () => void;
 }
-
-/**
- * The default strategy tab for a result: highest confidence, ties broken by
- * {@link STRATEGY_PRIORITY} (stricter strategies win).
- */
-const findBestStrategyIndex = (recommendations: MigrationAnalysis['recommendations']): number => {
-  if (recommendations.length === 0) return 0;
-
-  let bestIndex = 0;
-  let bestConfidence = recommendations[0]?.confidence || 0;
-
-  for (let i = 1; i < recommendations.length; i++) {
-    const current = recommendations[i];
-    const currentConfidence = current.confidence;
-
-    if (currentConfidence > bestConfidence) {
-      bestIndex = i;
-      bestConfidence = currentConfidence;
-    } else if (currentConfidence === bestConfidence) {
-      const currentPriority = STRATEGY_PRIORITY[current.strategy] || 0;
-      const bestPriority = STRATEGY_PRIORITY[recommendations[bestIndex].strategy] || 0;
-
-      if (currentPriority > bestPriority) {
-        bestIndex = i;
-      }
-    }
-  }
-
-  return bestIndex;
-};
 
 /** Owns analysis execution and the per-row strategy/export selection state. */
 export const useAnalysis = ({
@@ -77,47 +47,27 @@ export const useAnalysis = ({
     return availableRoles.filter((r) => r.properties.type === 'BuiltInRole');
   }, [availableRoles, includeCustomRoles]);
 
-  const runAnalysis = useCallback(async () => {
-    if (!selectedVault) return;
+  const runAnalysis = useCallback(() => {
+    if (!selectedVault) throw new Error('Select a Key Vault before running analysis.');
 
-    // Run analysis (using setTimeout to allow UI to update)
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const analysis = analyzePolicies(selectedVault.accessPolicies, rolesToAnalyze);
-
-        // Enhance with existing coverage check
-        const enhancedAnalysis = analysis.map((a) => {
-          const coverage = analyzeExistingCoverage(
-            a.originalPolicy,
-            roleAssignments,
-            availableRoles,
-            selectedVault.id
-          );
-          return { ...a, existingCoverage: coverage };
-        });
-
-        setResults(enhancedAnalysis);
-
-        // Set default strategy selections
-        const defaults: Record<string, number> = {};
-        enhancedAnalysis.forEach((a) => {
-          defaults[getPolicyKey(a.originalPolicy)] = findBestStrategyIndex(a.recommendations);
-        });
-        setSelectedRoles(defaults);
-
-        // Initialize export selection (all except Unknown type)
-        const exportIds = new Set<string>();
-        enhancedAnalysis.forEach((a) => {
-          const type = resolveIdentityType(a.originalPolicy, resolvedNames);
-          if (type !== 'Unknown') {
-            exportIds.add(getPolicyKey(a.originalPolicy));
-          }
-        });
-        setSelectedForExport(exportIds);
-
-        resolve();
-      }, 100);
+    // ponytail: synchronous bounded search; no delayed result can cross a vault selection.
+    const enhancedAnalysis = analyzePolicies(selectedVault.accessPolicies, rolesToAnalyze).map((analysis) => ({
+      ...analysis,
+      existingCoverage: analyzeExistingCoverage(
+        analysis.originalPolicy, roleAssignments, availableRoles, selectedVault.id
+      ),
+    }));
+    const defaults: Record<string, number> = {};
+    const exportIds = new Set<string>();
+    enhancedAnalysis.forEach((analysis) => {
+      const key = getPolicyKey(analysis.originalPolicy);
+      defaults[key] = Math.max(0, pickRecommendedIndex(analysis.recommendations));
+      if (resolveIdentityType(analysis.originalPolicy, resolvedNames) !== 'Unknown') exportIds.add(key);
     });
+
+    setResults(enhancedAnalysis);
+    setSelectedRoles(defaults);
+    setSelectedForExport(exportIds);
   }, [selectedVault, rolesToAnalyze, roleAssignments, availableRoles, resolvedNames]);
 
   const clearResults = useCallback(() => {

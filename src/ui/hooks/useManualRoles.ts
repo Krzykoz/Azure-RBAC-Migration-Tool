@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RoleDefinition, Subscription } from '../../core/types';
 import { getBuiltInKeyVaultRoles } from '../../core/roles/builtIn';
 import { parseRolesJson } from '../../core/roles/normalization';
@@ -44,13 +44,42 @@ export const useManualRoles = (): UseManualRoles => {
   const [pasteError, setPasteError] = useState<string | null>(null);
 
   // Live token source
-  const [token, setToken] = useState('');
+  const [token, setTokenState] = useState('');
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [selectedSubId, setSelectedSubId] = useState('');
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [tokenRoles, setTokenRoles] = useState<RoleDefinition[]>([]);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const tokenRef = useRef('');
+  const selectedSubRef = useRef('');
+  const subscriptionRequest = useRef(0);
+  const roleRequest = useRef(0);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      subscriptionRequest.current++;
+      roleRequest.current++;
+    };
+  }, []);
+
+  const setToken = useCallback((value: string) => {
+    if (value === tokenRef.current) return;
+    tokenRef.current = value;
+    subscriptionRequest.current++;
+    roleRequest.current++;
+    selectedSubRef.current = '';
+    setTokenState(value);
+    setSubscriptions([]);
+    setSelectedSubId('');
+    setTokenRoles([]);
+    setTokenError(null);
+    setLoadingSubs(false);
+    setLoadingRoles(false);
+  }, []);
 
   const builtInRoles = useMemo(() => getBuiltInKeyVaultRoles(), []);
 
@@ -75,48 +104,77 @@ export const useManualRoles = (): UseManualRoles => {
   }, [pasteJson, roleSource]);
 
   const selectSubscription = (id: string) => {
+    subscriptionRequest.current++;
+    roleRequest.current++;
+    selectedSubRef.current = id;
     setSelectedSubId(id);
     setTokenRoles([]);
+    setTokenError(null);
+    setLoadingSubs(false);
+    setLoadingRoles(false);
   };
 
   const loadSubscriptions = async () => {
+    const request = ++subscriptionRequest.current;
+    roleRequest.current++;
+    const requestedToken = tokenRef.current.trim();
+    const isCurrent = () => mounted.current && request === subscriptionRequest.current &&
+      requestedToken === tokenRef.current.trim();
+    selectedSubRef.current = '';
     setTokenError(null);
     setSubscriptions([]);
     setSelectedSubId('');
     setTokenRoles([]);
+    setLoadingSubs(false);
+    setLoadingRoles(false);
 
-    if (!token.trim()) {
+    if (!requestedToken) {
       setTokenError('Paste a Management token first.');
       return;
     }
 
     setLoadingSubs(true);
     try {
-      await validateToken(token.trim());
-      const subs = await getSubscriptions(token.trim());
+      await validateToken(requestedToken);
+      if (!isCurrent()) return;
+      const subs = await getSubscriptions(requestedToken);
+      if (!isCurrent()) return;
       if (subs.length === 0) {
         setTokenError('Token is valid, but no subscriptions are visible to it.');
         return;
       }
       setSubscriptions(subs);
+      selectedSubRef.current = subs[0].subscriptionId;
       setSelectedSubId(subs[0].subscriptionId);
-    } catch (e: any) {
-      setTokenError(e?.message || 'Failed to validate token.');
+    } catch (e: unknown) {
+      if (!isCurrent()) return;
+      setTokenError(e instanceof Error ? e.message : 'Failed to validate token.');
     } finally {
-      setLoadingSubs(false);
+      if (isCurrent()) setLoadingSubs(false);
     }
   };
 
   const loadRoles = async () => {
+    const request = ++roleRequest.current;
+    const requestedToken = tokenRef.current.trim();
+    const requestedSub = selectedSubRef.current;
+    const isCurrent = () => mounted.current && request === roleRequest.current &&
+      requestedToken === tokenRef.current.trim() && requestedSub === selectedSubRef.current;
     setTokenError(null);
     setTokenRoles([]);
-    if (!selectedSubId) {
+    setLoadingRoles(false);
+    if (!requestedToken) {
+      setTokenError('Paste a Management token first.');
+      return;
+    }
+    if (!requestedSub) {
       setTokenError('Select a subscription first.');
       return;
     }
     setLoadingRoles(true);
     try {
-      const roles = await getRoleDefinitions(token.trim(), selectedSubId);
+      const roles = await getRoleDefinitions(requestedToken, requestedSub);
+      if (!isCurrent()) return;
       if (roles.length === 0) {
         setTokenError(
           'Connected, but no Key Vault roles were found in the selected subscription.'
@@ -124,10 +182,11 @@ export const useManualRoles = (): UseManualRoles => {
         return;
       }
       setTokenRoles(roles);
-    } catch (e: any) {
-      setTokenError(e?.message || 'Failed to load role definitions.');
+    } catch (e: unknown) {
+      if (!isCurrent()) return;
+      setTokenError(e instanceof Error ? e.message : 'Failed to load role definitions.');
     } finally {
-      setLoadingRoles(false);
+      if (isCurrent()) setLoadingRoles(false);
     }
   };
 

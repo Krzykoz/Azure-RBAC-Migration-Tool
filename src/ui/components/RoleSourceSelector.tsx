@@ -84,6 +84,7 @@ export const RoleSourceSelector: React.FC<RoleSourceSelectorProps> = ({
       {roleSource === 'paste' && (
         <div className="mt-3 max-w-2xl">
           <textarea
+            aria-label="Role definitions JSON"
             value={pasteJson}
             onChange={(e) => onChangePasteJson(e.target.value)}
             placeholder="Paste Role Definitions JSON (az role definition list output)..."
@@ -99,6 +100,8 @@ export const RoleSourceSelector: React.FC<RoleSourceSelectorProps> = ({
         <div className="mt-3 max-w-2xl space-y-2">
           <CopyableCommand command={TOKEN_COMMAND} commandId="manual-token" />
           <textarea
+            aria-label="Management token"
+            spellCheck={false}
             value={token}
             onChange={(e) => onChangeToken(e.target.value)}
             placeholder="Paste Management token..."
@@ -116,6 +119,7 @@ export const RoleSourceSelector: React.FC<RoleSourceSelectorProps> = ({
             {subscriptions.length > 0 && (
               <>
                 <select
+                  aria-label="Subscription"
                   value={selectedSubId}
                   onChange={(e) => onSelectSubscription(e.target.value)}
                   className="flex-1 min-w-[140px] text-xs p-2 rounded bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 outline-none"

@@ -103,6 +103,14 @@ describe('runWeightedAnalysis — strategy scoring differentiation', () => {
 });
 
 describe('runWeightedAnalysis — wildcard matching subtleties', () => {
+  it('accepts global and embedded Key Vault wildcards', () => {
+    const policy = makePolicy({ secrets: ['Get'] });
+    for (const action of ['*', 'Microsoft.KeyVault/*/secrets/*']) {
+      const [analysis] = analyzePolicies([policy], [makeRole('Wildcard', [action])]);
+      expect(analysis.recommendations[0].missingPermissions).toEqual([]);
+    }
+  });
+
   it('secrets/* matches children but NOT a sibling prefix (secretsbackup)', () => {
     const sibling = 'Microsoft.KeyVault/vaults/secretsbackup/read';
     const required = new Set([ACTIONS.SECRET_GET, sibling]);
@@ -111,6 +119,34 @@ describe('runWeightedAnalysis — wildcard matching subtleties', () => {
     const rec = runWeightedAnalysis(required, [star], strategyConfig('Max Coverage'));
     expect(rec.coveredPermissions).toContain(ACTIONS.SECRET_GET);
     expect(rec.missingPermissions).toContain(sibling);
+  });
+
+  describe('analysis safety and search bounds', () => {
+    it('rejects unknown permissions rather than reporting full coverage', () => {
+      for (const permission of ['GetTypo', 'constructor', '__proto__', ' All ']) {
+        const policy = makePolicy({ secrets: ['Get', permission] });
+        expect(() => analyzePolicies([policy], [makeRole('Get', [ACTIONS.SECRET_GET])]))
+          .toThrow(/Unsupported permission/);
+        expect(() => analyzeExistingCoverage(policy, [], [], '/vaults/v'))
+          .toThrow(/Unsupported permission/);
+      }
+    });
+
+    it('combines more than four roles when each covers a distinct action', () => {
+      const verbs = ['Get', 'Delete', 'Recover', 'Backup', 'Restore'];
+      const actions = ['getSecret/action', 'delete', 'recover/action', 'backup/action', 'restore/action'];
+      const roles = actions.map((action) => makeRole(action, [`Microsoft.KeyVault/vaults/secrets/${action}`]));
+      const [analysis] = analyzePolicies([makePolicy({ secrets: verbs })], roles);
+      expect(analysis.recommendations[0].roleNames).toHaveLength(5);
+      expect(analysis.recommendations[0].missingPermissions).toEqual([]);
+    });
+
+    it('handles a large set of equivalent roles without enumerating subsets', () => {
+      const roles = Array.from({ length: 1000 }, (_, i) => makeRole(`Reader ${i}`, [ACTIONS.SECRET_GET]));
+      const [analysis] = analyzePolicies([makePolicy({ secrets: ['Get'] })], roles);
+      expect(analysis.recommendations[0].roleNames).toEqual(['Reader 0']);
+      expect(analysis.recommendations[0].confidence).toBe(100);
+    }, 1000);
   });
 
   it('respects notDataActions exclusions on wildcard roles', () => {
@@ -122,6 +158,15 @@ describe('runWeightedAnalysis — wildcard matching subtleties', () => {
     const rec = runWeightedAnalysis(required, [role], strategyConfig('Max Coverage'));
     expect(rec.coveredPermissions).toContain(ACTIONS.SECRET_GET);
     expect(rec.missingPermissions).toContain(ACTIONS.SECRET_DELETE);
+  });
+
+  it('unions permission entries without treating their exclusions as role-wide denies', () => {
+    const role = makeRole('Restored Get', [ACTIONS.SECRETS_WILDCARD], {
+      notDataActions: [ACTIONS.SECRET_GET],
+    });
+    role.properties.permissions.push(makeRole('Get', [ACTIONS.SECRET_GET]).properties.permissions[0]);
+    const rec = runWeightedAnalysis(new Set([ACTIONS.SECRET_GET]), [role], strategyConfig('Max Coverage'));
+    expect(rec.missingPermissions).toEqual([]);
   });
 
   it('returns a No Match when nothing meets the strategy threshold', () => {
@@ -136,6 +181,21 @@ describe('runWeightedAnalysis — wildcard matching subtleties', () => {
 });
 
 describe('analyzePolicies — duplicate strategy merging', () => {
+  it('does not merge a comma-bearing role name with a different two-role combination', () => {
+    const roles = [
+      makeRole('A,B', [ACTIONS.SECRET_GET, ACTIONS.SECRET_DELETE, ACTIONS.SECRET_PURGE]),
+      makeRole('A', [ACTIONS.SECRET_GET]),
+      makeRole('B', [ACTIONS.SECRET_DELETE]),
+    ];
+    const [analysis] = analyzePolicies([makePolicy({ secrets: ['Get', 'Delete'] })], roles);
+    expect(analysis.recommendations).toHaveLength(2);
+    const narrow = analysis.recommendations.find((rec) => rec.roleNames.length === 2);
+    expect(narrow?.strategy).toContain('Minimize Excess');
+    expect(narrow?.excessPermissions).toEqual([]);
+    expect(analysis.recommendations.find((rec) => rec.roleNames[0] === 'A,B')?.strategy)
+      .not.toContain('Minimize Excess');
+  });
+
   it('merges strategies that yield identical role sets into one labelled recommendation', () => {
     const policy = makePolicy({ secrets: ['Get'] });
     const role = makeRole('Exact Get', [ACTIONS.SECRET_GET]);
@@ -219,5 +279,12 @@ describe('analyzeExistingCoverage — RBAC scope inheritance', () => {
     );
     expect(res.isFullyCovered).toBe(false);
     expect(res.roleMatches).toEqual([]);
+  });
+
+  it('ignores assignments without scope and matches identifiers case-insensitively', () => {
+    expect(analyzeExistingCoverage(policy, [makeAssignment('user1', roleDefId, '')], [role], VAULT).isFullyCovered)
+      .toBe(false);
+    expect(analyzeExistingCoverage(policy, [makeAssignment('USER1', roleDefId.toUpperCase(), VAULT)], [role], VAULT).isFullyCovered)
+      .toBe(true);
   });
 });

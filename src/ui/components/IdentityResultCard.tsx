@@ -83,6 +83,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
         <div className="min-w-0 2xl:col-span-3 2xl:pr-2">
           <div className="flex items-start gap-4">
             <Checkbox
+              label={`Select ${displayName || res.originalPolicy.objectId}${hasAppId ? ` (app ${res.originalPolicy.applicationId})` : ''} for export`}
               checked={isSelected}
               onChange={onToggleSelection}
               className="mt-1"
@@ -118,16 +119,22 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
               </div>
 
               {/* Existing Coverage Badge */}
+              {hasAppId && (
+                <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
+                  Manual migration required: RBAC cannot preserve this application's restriction.
+                  PowerShell export will skip this identity.
+                </p>
+              )}
               {existingCoverageBadge(res.existingCoverage) === 'covered' && (
                 <div className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-medium border border-green-200 dark:border-green-800">
                   <CheckCircleIcon className="w-3 h-3" />
-                  Already Covered
+                  Already Covered (Direct Principal)
                 </div>
               )}
               {existingCoverageBadge(res.existingCoverage) === 'partial' && (
                 <div className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-medium border border-blue-100 dark:border-blue-800">
                   <ShieldCheckIcon className="w-3 h-3" />
-                  Partially Covered
+                  Partially Covered (Direct Principal)
                 </div>
               )}
 
@@ -187,6 +194,7 @@ export const IdentityResultCard: React.FC<IdentityResultCardProps> = ({
                     : 'bg-white border-neutral-200 text-neutral-500 hover:border-brand-300 hover:text-neutral-700 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
                     }`}
                   title={rec.reasoning}
+                  aria-pressed={selectedRoleIdx === recIdx}
                 >
                   {rec.strategy}
                 </button>

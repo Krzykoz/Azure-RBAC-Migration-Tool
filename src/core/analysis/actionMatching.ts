@@ -14,7 +14,7 @@ export const actionMatches = (roleAction: string, requiredAction: string): boole
 
   if (r === '*' || r === req) return true;
 
-  if (r.endsWith('/*')) {
+  if (r.endsWith('/*') && r.indexOf('*') === r.length - 1) {
     const prefix = r.slice(0, -1); // keep trailing slash
     return req.startsWith(prefix);
   }

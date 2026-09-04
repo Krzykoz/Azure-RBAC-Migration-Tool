@@ -1,6 +1,6 @@
 import { RoleDefinition, SuggestedRole, RoleBreakdown } from '../types';
-import { ANALYSIS_CONSTANTS, StrategyConfig } from '../constants';
-import { calculateCoverage, RoleCoverage } from './coverage';
+import { StrategyConfig } from '../constants';
+import { calculateCoverage } from './coverage';
 import { defaultPermissionCatalog, PermissionCatalog } from './permissionCatalog';
 
 /**
@@ -26,14 +26,10 @@ const noMatch = (config: StrategyConfig, required: Set<string>): SuggestedRole =
 });
 
 /**
- * Find the best single- or multi-role combination for `required` under a given
- * strategy. Searches bounded role combinations (up to
- * {@link ANALYSIS_CONSTANTS.MAX_COMBINATION_SIZE}) and scores each as:
- *
- *   score = covered·Wcoverage − excess·Wexcess − (roleCount − 1)·WroleCount
- *
- * The highest-scoring combination above the strategy threshold wins; otherwise a
- * "No Match" recommendation is returned.
+ * Greedily add roles by marginal coverage minus excess and assignment cost.
+ * Every addition must cover a new required action, bounding the number of passes
+ * by the policy size rather than a fixed role limit. Max Coverage keeps adding
+ * useful roles even when their excess makes the marginal score negative.
  */
 export const runWeightedAnalysis = (
   required: Set<string>,
@@ -41,77 +37,59 @@ export const runWeightedAnalysis = (
   config: StrategyConfig,
   catalog: PermissionCatalog = defaultPermissionCatalog
 ): SuggestedRole => {
-  const maxCombinations = ANALYSIS_CONSTANTS.MAX_COMBINATION_SIZE;
-
-  let bestCombination: RoleDefinition[] = [];
-  let bestScore = -Infinity;
-  let bestCovered = new Set<string>();
-  let bestExcess = new Set<string>();
-
-  // Precompute coverage for each role exactly once; the combination search reuses
-  // these cached sets instead of recomputing coverage for every subset.
-  const coverageCache = new Map<RoleDefinition, RoleCoverage>();
-  const getCoverage = (role: RoleDefinition): RoleCoverage => {
-    let entry = coverageCache.get(role);
-    if (!entry) {
-      entry = calculateCoverage(required, role, catalog);
-      coverageCache.set(role, entry);
-    }
-    return entry;
-  };
-
-  const evaluateCombination = (combo: RoleDefinition[]) => {
-    const combinedCovered = new Set<string>();
-    const combinedExcess = new Set<string>();
-
-    combo.forEach((role) => {
-      const { covered, excess } = getCoverage(role);
-      covered.forEach((c) => combinedCovered.add(c));
-      excess.forEach((e) => combinedExcess.add(e));
+  required = new Set(new Map(Array.from(required, (action) => [action.toLowerCase(), action])).values());
+  const signatures = new Set<string>();
+  const candidates = roles.map((role) => ({ role, ...calculateCoverage(required, role, catalog) }))
+    .filter(({ covered, excess }) => {
+      if (covered.size === 0) return false;
+      const signature = JSON.stringify([[...covered].sort(), [...excess].sort()]);
+      if (signatures.has(signature)) return false;
+      signatures.add(signature);
+      return true;
     });
+  const selected: typeof candidates = [];
+  const bestCovered = new Set<string>();
+  const bestExcess = new Set<string>();
 
-    const score =
-      combinedCovered.size * config.weights.coverage -
-      combinedExcess.size * config.weights.excess -
-      (combo.length - 1) * config.weights.roleCount;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestCombination = [...combo];
-      bestCovered = combinedCovered;
-      bestExcess = combinedExcess;
+  // ponytail: greedy, not globally optimal; bounded by distinct required actions, not role subsets.
+  while (bestCovered.size < required.size) {
+    let best: (typeof candidates)[number] | undefined;
+    let bestGain = -Infinity;
+    for (const candidate of candidates) {
+      const addedCoverage = [...candidate.covered].filter((action) => !bestCovered.has(action)).length;
+      if (addedCoverage === 0) continue;
+      const addedExcess = [...candidate.excess].filter((action) => !bestExcess.has(action)).length;
+      const gain = addedCoverage * config.weights.coverage -
+        addedExcess * config.weights.excess -
+        (selected.length > 0 ? config.weights.roleCount : 0);
+      if (gain > bestGain) {
+        best = candidate;
+        bestGain = gain;
+      }
     }
-  };
-
-  const usefulRoles = roles.filter((r) => getCoverage(r).covered.size > 0);
-
-  const generateCombinations = (startIdx: number, currentCombo: RoleDefinition[]) => {
-    if (currentCombo.length > 0) evaluateCombination(currentCombo);
-    if (currentCombo.length >= maxCombinations) return;
-
-    for (let i = startIdx; i < usefulRoles.length; i++) {
-      currentCombo.push(usefulRoles[i]);
-      generateCombinations(i + 1, currentCombo);
-      currentCombo.pop();
-    }
-  };
-
-  generateCombinations(0, []);
-
-  if (bestCombination.length === 0 || bestScore < config.threshold) {
-    return noMatch(config, required);
+    if (!best || (config.name !== 'Max Coverage' && bestGain < Math.max(0, config.threshold))) break;
+    selected.push(best);
+    best.covered.forEach((action) => bestCovered.add(action));
+    best.excess.forEach((action) => bestExcess.add(action));
   }
 
-  const roleBreakdown: RoleBreakdown[] = bestCombination.map((role) => {
-    const { covered, excess } = getCoverage(role);
-    return {
+  if (selected.length === 0) return noMatch(config, required);
+
+  // Later choices may subsume an earlier role; don't export redundant assignments.
+  for (let i = selected.length - 1; i >= 0; i--) {
+    const others = new Set(selected.flatMap((candidate, index) => index === i ? [] : [...candidate.covered]));
+    if ([...selected[i].covered].every((action) => others.has(action))) selected.splice(i, 1);
+  }
+  bestExcess.clear();
+  selected.forEach((candidate) => candidate.excess.forEach((action) => bestExcess.add(action)));
+
+  const roleBreakdown: RoleBreakdown[] = selected.map(({ role, covered, excess }) => ({
       roleName: role.properties.roleName,
       covered: Array.from(covered),
       excess: Array.from(excess),
-    };
-  });
+  }));
 
-  const roleNames = bestCombination.map((r) => r.properties.roleName);
+  const roleNames = selected.map(({ role }) => role.properties.roleName);
 
   return {
     strategy: config.name,

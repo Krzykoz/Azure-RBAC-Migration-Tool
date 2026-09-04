@@ -127,6 +127,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
       <React.Fragment>
         <div className="px-6 py-2 bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 font-semibold text-xs text-neutral-800 dark:text-neutral-300 uppercase tracking-wider sticky top-12 z-10 flex items-center gap-4">
           <Checkbox
+            label={`Select ${title} for export`}
             checked={selectionState === 'all'}
             indeterminate={selectionState === 'some'}
             onChange={() => toggleCategorySelection(groupData)}
@@ -168,11 +169,18 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({
 
       {/* Detailed List */}
       <div>
+        <p className="mb-4 text-sm text-neutral-700 dark:text-neutral-300">
+          Existing coverage includes only assignments to each listed principal at the vault,
+          resource-group, subscription, or root scope. Group membership, management-group
+          inheritance, and other effective-access restrictions are not evaluated.
+          PowerShell export skips compound identities and identities already covered by these assignments.
+        </p>
         <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">Identity Mapping</h3>
         <div className="border border-neutral-200 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 overflow-hidden">
           <div className="hidden 2xl:grid grid-cols-12 gap-4 px-6 py-3 bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider">
             <div className="col-span-3 flex items-center gap-4">
               <Checkbox
+                label="Select all identities for export"
                 checked={getAllSelectionState() === 'all'}
                 indeterminate={getAllSelectionState() === 'some'}
                 onChange={toggleAllSelection}

@@ -3,7 +3,6 @@ import {
   KeyVaultResponse,
   SubscriptionResponse,
   TenantResponse,
-  RoleAssignmentResponse,
   GraphResponse,
   parseKeyVaultResponse,
   parseSubscriptions,
@@ -12,6 +11,9 @@ import {
   parseGraphResponse,
 } from './parsers';
 import { AZURE_API_VERSIONS, AZURE_ENDPOINTS, ANALYSIS_CONSTANTS } from '../core/constants';
+import { actionMatches } from '../core/analysis/actionMatching';
+import { defaultPermissionCatalog } from '../core/analysis/permissionCatalog';
+import { normalizeRoleDefinitions } from '../core/roles/normalization';
 
 const { ARM, GRAPH } = AZURE_ENDPOINTS;
 const API = AZURE_API_VERSIONS;
@@ -45,22 +47,46 @@ const azureFetch = async <T>(url: string, token: string): Promise<T> => {
 };
 
 interface PagedListResponse<TItem> {
-  value?: TItem[];
-  nextLink?: string;
+  value: TItem[];
+  nextLink?: string | null;
 }
+
+const encodeIdentifier = (value: string, label: string): string => {
+  if (typeof value !== 'string' || !value.trim() || value === '.' || value === '..') {
+    throw new AzureError(`${label} must be a nonempty identifier.`);
+  }
+  return encodeURIComponent(value);
+};
+
+const encodeResourceId = (id: string): string => {
+  if (typeof id !== 'string' || !id.startsWith('/') || /[?#\\]/.test(id)) {
+    throw new AzureError('Vault resource ID must be an absolute ARM resource path.');
+  }
+  return '/' + id.slice(1).split('/').map((part) => encodeIdentifier(part, 'Vault resource ID segment')).join('/');
+};
 
 // ARM list endpoints return at most one page of results plus an absolute `nextLink` URL.
 // This helper follows nextLink until exhausted so large subscriptions are not silently truncated.
 const azureFetchAllPages = async <TItem>(url: string, token: string): Promise<TItem[]> => {
   const items: TItem[] = [];
   let nextUrl: string | undefined = url;
+  const visited = new Set<string>();
 
   while (nextUrl) {
-    const page: PagedListResponse<TItem> = await azureFetch<PagedListResponse<TItem>>(nextUrl, token);
-    if (page.value && page.value.length > 0) {
-      items.push(...page.value);
+    const parsedUrl = new URL(nextUrl);
+    if (parsedUrl.origin !== ARM || parsedUrl.username || parsedUrl.password || visited.has(parsedUrl.href)) {
+      throw new AzureError('Azure API returned an invalid or repeated pagination URL.');
     }
-    nextUrl = page.nextLink;
+    visited.add(parsedUrl.href);
+    const page: PagedListResponse<TItem> = await azureFetch<PagedListResponse<TItem>>(nextUrl, token);
+    if (!page || !Array.isArray(page.value)) {
+      throw new AzureError('Azure API returned an invalid list: expected a value array.');
+    }
+    if (page.nextLink != null && (typeof page.nextLink !== 'string' || !page.nextLink.trim())) {
+      throw new AzureError('Azure API returned an invalid pagination URL.');
+    }
+    items.push(...page.value);
+    nextUrl = page.nextLink ?? undefined;
   }
 
   return items;
@@ -111,37 +137,21 @@ export const getRoleDefinitions = async (
   token: string,
   subscriptionId: string
 ): Promise<RoleDefinition[]> => {
-  const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions?api-version=${API.AUTHORIZATION}`;
+  const url = `${ARM}/subscriptions/${encodeIdentifier(subscriptionId, 'Subscription ID')}/providers/Microsoft.Authorization/roleDefinitions?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const roles = await azureFetchAllPages<RoleDefinition>(url, token);
+    const roles = normalizeRoleDefinitions(await azureFetchAllPages<unknown>(url, token));
+    const knownActions = [...defaultPermissionCatalog.knownActions];
 
-    // Filter to Key Vault related roles
-    return roles.filter((role) => {
-      const perms = role.properties.permissions;
-      if (!perms || perms.length === 0) return false;
-
-      const allDataActions = perms.flatMap((p) => p.dataActions || []);
-      return allDataActions.join(',').toLowerCase().includes('microsoft.keyvault');
-    });
+    return roles.filter((role) => role.properties.permissions.some((permission) =>
+      permission.dataActions.some((action) =>
+        action.toLowerCase().includes('microsoft.keyvault') ||
+        knownActions.some((known) => actionMatches(action, known))
+      )
+    ));
   } catch (e) {
     console.error('Failed to fetch role definitions', e);
-    return [];
-  }
-};
-
-const getPrincipalTypesCache = async (
-  token: string,
-  subscriptionId: string
-): Promise<Record<string, IdentityType>> => {
-  const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
-
-  try {
-    const value = await azureFetchAllPages<RoleAssignmentResponse['value'][number]>(url, token);
-    return parsePrincipalTypes({ value });
-  } catch (e) {
-    console.warn('Failed to fetch role assignments for type resolution.', e);
-    return {};
+    throw e;
   }
 };
 
@@ -149,13 +159,13 @@ export const getRoleAssignments = async (
   token: string,
   subscriptionId: string
 ): Promise<RoleAssignment[]> => {
-  const url = `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
+  const url = `${ARM}/subscriptions/${encodeIdentifier(subscriptionId, 'Subscription ID')}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
 
   try {
     return await azureFetchAllPages<RoleAssignment>(url, token);
   } catch (e) {
     console.error('Failed to fetch role assignments', e);
-    return [];
+    throw e;
   }
 };
 
@@ -166,9 +176,10 @@ export const getRoleAssignments = async (
  */
 export const resolveBatchIdentities = async (
   objectIds: string[],
-  token: string
+  token: string,
+  applicationIds: string[] = []
 ): Promise<Record<string, { name: string; type: IdentityType }>> => {
-  if (objectIds.length === 0) return {};
+  if (objectIds.length === 0 && applicationIds.length === 0) return {};
 
   const uniqueIds = [...new Set(objectIds)];
   const results: Record<string, { name: string; type: IdentityType }> = {};
@@ -203,19 +214,42 @@ export const resolveBatchIdentities = async (
     }
   }
 
+  const uniqueAppIds = [...new Set(applicationIds)];
+  const concurrencyLimit = ANALYSIS_CONSTANTS.VAULT_CONCURRENCY_LIMIT;
+  for (let i = 0; i < uniqueAppIds.length; i += concurrencyLimit) {
+    await Promise.all(uniqueAppIds.slice(i, i + concurrencyLimit).map(async (appId) => {
+      try {
+        if (typeof appId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appId)) {
+          throw new AzureError('Application ID must be a GUID for Graph lookup.');
+        }
+        const url = `${GRAPH}/servicePrincipals(appId='${encodeURIComponent(appId)}')?$select=id,displayName,appDisplayName`;
+        const principal = await azureFetch<GraphResponse['value'][number]>(url, token);
+        const resolved = parseGraphResponse({
+          value: [{ ...principal, '@odata.type': '#microsoft.graph.servicePrincipal' }],
+        });
+        Object.assign(results, resolved);
+        if (resolved[principal.id]) results[appId] = resolved[principal.id];
+      } catch (e) {
+        console.warn(`Graph application resolution failed for ${appId}`, e);
+      }
+    }));
+  }
+
   return results;
 };
 
 export const getKeyVaults = async (
   token: string,
-  subscriptionId: string
+  subscriptionId: string,
+  roleAssignments?: RoleAssignment[]
 ): Promise<KeyVault[]> => {
-  const listUrl = `${ARM}/subscriptions/${subscriptionId}/resources?$filter=resourceType eq 'Microsoft.KeyVault/vaults'&api-version=${API.RESOURCES}`;
+  const listUrl = `${ARM}/subscriptions/${encodeIdentifier(subscriptionId, 'Subscription ID')}/resources?$filter=resourceType eq 'Microsoft.KeyVault/vaults'&api-version=${API.RESOURCES}`;
 
-  const [listValue, principalTypeCache] = await Promise.all([
+  const [listValue, assignments] = await Promise.all([
     azureFetchAllPages<{ id: string }>(listUrl, token),
-    getPrincipalTypesCache(token, subscriptionId),
+    roleAssignments ?? getRoleAssignments(token, subscriptionId),
   ]);
+  const principalTypeCache = parsePrincipalTypes({ value: assignments });
 
   if (!listValue || listValue.length === 0) {
     return [];
@@ -229,19 +263,20 @@ export const getKeyVaults = async (
 
     const chunkPromises = chunk.map(async (resource) => {
       try {
-        const vaultUrl = `${ARM}${resource.id}?api-version=${API.KEYVAULT}`;
+        const vaultUrl = `${ARM}${encodeResourceId(resource.id)}?api-version=${API.KEYVAULT}`;
         const vaultData = await azureFetch<KeyVaultResponse>(vaultUrl, token);
         return parseKeyVaultResponse(vaultData, principalTypeCache);
       } catch (e) {
         console.error(`Failed to fetch details for vault ${resource.id}`, e);
-        return null;
+        throw new AzureError(
+          `Failed to load vault "${resource.id}": ${e instanceof Error ? e.message : String(e)}`,
+          e
+        );
       }
     });
 
     const chunkResults = await Promise.all(chunkPromises);
-    chunkResults.forEach((r) => {
-      if (r) results.push(r);
-    });
+    results.push(...chunkResults);
   }
 
   return results;

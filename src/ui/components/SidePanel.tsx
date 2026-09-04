@@ -49,6 +49,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
             <input
               type="text"
               placeholder="Filter subscriptions..."
+              aria-label="Filter subscriptions"
               value={subSearch}
               onChange={(e) => setSubSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded-sm focus:border-brand-600 focus:ring-1 focus:ring-brand-600 outline-none bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-600 dark:placeholder-neutral-400"
@@ -98,6 +99,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
               <input
                 type="text"
                 placeholder="Filter key vaults..."
+                aria-label="Filter key vaults"
                 value={vaultSearch}
                 onChange={(e) => setVaultSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded-sm focus:border-brand-600 focus:ring-1 focus:ring-brand-600 outline-none bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-600 dark:placeholder-neutral-400"

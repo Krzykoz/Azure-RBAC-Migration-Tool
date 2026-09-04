@@ -31,11 +31,11 @@ export const CoverageBanner: React.FC<CoverageBannerProps> = ({
       <>
         <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded text-xs mb-2">
           <div className="font-semibold text-green-800 dark:text-green-300 flex items-center gap-1 mb-2">
-            <CheckCircleIcon className="w-3.5 h-3.5" /> Fully Covered via RBAC
+            <CheckCircleIcon className="w-3.5 h-3.5" /> Fully Covered by Direct-Principal RBAC Assignments
           </div>
           {showDetails && (
             <div className="pt-2 border-t border-green-200 dark:border-green-800">
-              <div className="text-[10px] font-medium text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">Existing Roles Coverage</div>
+              <div className="text-[10px] font-medium text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">Direct-Principal Assignments Coverage</div>
               <PermissionVisualizer breakdown={breakdown} missing={[]} />
             </div>
           )}
@@ -62,11 +62,11 @@ export const CoverageBanner: React.FC<CoverageBannerProps> = ({
   return (
     <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded text-xs mb-2">
       <div className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1 mb-2">
-        <ShieldCheckIcon className="w-3.5 h-3.5" /> Partially Covered
+        <ShieldCheckIcon className="w-3.5 h-3.5" /> Partially Covered by Direct-Principal RBAC Assignments
       </div>
       {showDetails && (
         <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
-          <div className="text-[10px] font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-1">Existing Roles Coverage</div>
+          <div className="text-[10px] font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-1">Direct-Principal Assignments Coverage</div>
           <PermissionVisualizer breakdown={breakdown} missing={existingCoverage.missingPermissions} />
         </div>
       )}

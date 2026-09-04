@@ -77,6 +77,14 @@ describe('normalizeRoleDefinitions — ARM vs flat CLI shapes', () => {
     ]);
     expect(roles.map((r) => r.properties.roleName)).toEqual(['Keep']);
   });
+
+  it('drops malformed non-string identifiers instead of leaking them into coverage', () => {
+    expect(normalizeRoleDefinitions({
+      name: 42,
+      roleName: 'Malformed',
+      permissions: [{ dataActions: ['x'] }],
+    })).toEqual([]);
+  });
 });
 
 describe('parseRolesJson', () => {

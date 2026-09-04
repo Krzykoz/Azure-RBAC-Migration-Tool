@@ -175,21 +175,21 @@ const renderCoverageBanner = (
   if (kind === 'full') {
     const details =
       coverage.roleMatches.length > 0
-        ? `<div class="banner-sub">Existing Roles Coverage</div>${renderVisualizer(
+        ? `<div class="banner-sub">Direct-Principal Assignments Coverage</div>${renderVisualizer(
             breakdown,
             [],
             `covfull-${keyBase}`
           )}`
         : '';
-    return `<div class="banner banner-green"><div class="banner-title">${iconSvg('check', 'bic')} Fully Covered via RBAC</div><div class="collapsible" id="${id}">${details}</div><button class="banner-toggle banner-toggle-green" data-action="toggle" data-target="${id}" data-more="Show Details" data-less="Hide Details">Show Details</button></div>`;
+    return `<div class="banner banner-green"><div class="banner-title">${iconSvg('check', 'bic')} Fully Covered by Direct-Principal RBAC Assignments</div><div class="collapsible" id="${id}">${details}</div><button class="banner-toggle banner-toggle-green" data-action="toggle" data-target="${id}" data-more="Show Details" data-less="Hide Details">Show Details</button></div>`;
   }
 
-  const details = `<div class="banner-sub">Existing Roles Coverage</div>${renderVisualizer(
+  const details = `<div class="banner-sub">Direct-Principal Assignments Coverage</div>${renderVisualizer(
     breakdown,
     coverage.missingPermissions,
     `covpart-${keyBase}`
   )}`;
-  return `<div class="banner banner-blue"><div class="banner-title">${iconSvg('shield', 'bic')} Partially Covered</div><div class="collapsible" id="${id}">${details}</div><button class="banner-toggle banner-toggle-blue" data-action="toggle" data-target="${id}" data-more="Show Details" data-less="Hide Details">Show Details</button></div>`;
+  return `<div class="banner banner-blue"><div class="banner-title">${iconSvg('shield', 'bic')} Partially Covered by Direct-Principal RBAC Assignments</div><div class="collapsible" id="${id}">${details}</div><button class="banner-toggle banner-toggle-blue" data-action="toggle" data-target="${id}" data-more="Show Details" data-less="Hide Details">Show Details</button></div>`;
 };
 
 const renderLegacyPolicy = (
@@ -209,6 +209,11 @@ const renderLegacyPolicy = (
   return `<div class="collapsible legacy" id="lp-${rowId}">${cats || '<span class="lp-empty">No legacy permissions.</span>'}</div>`;
 };
 
+const selectedStrategyIndex = (res: MigrationAnalysis, selectedRoles: Record<string, number>): number => {
+  const index = selectedRoles[getPolicyKey(res.originalPolicy)] || 0;
+  return res.recommendations[index] ? index : 0;
+};
+
 const renderIdentityCard = (
   res: MigrationAnalysis,
   resolvedNames: ResolvedNames,
@@ -216,14 +221,13 @@ const renderIdentityCard = (
   rowId: string
 ): string => {
   const policy = res.originalPolicy;
-  const policyKey = getPolicyKey(policy);
   const { displayName } = describeIdentity(policy, resolvedNames);
   const isKnown = !!displayName;
   const compound = isCompoundIdentity(policy);
   const currentType = resolveIdentityType(policy, resolvedNames);
   const coverage = res.existingCoverage;
 
-  const selectedIdx = selectedRoles[policyKey] || 0;
+  const selectedIdx = selectedStrategyIndex(res, selectedRoles);
   const recs = res.recommendations;
 
   // --- Identity column ---------------------------------------------------
@@ -246,13 +250,16 @@ const renderIdentityCard = (
   const badge = existingCoverageBadge(coverage);
   const coverageBadge =
     badge === 'covered'
-      ? `<div class="id-pill id-pill-green">${iconSvg('check', 'pic')} Already Covered</div>`
+      ? `<div class="id-pill id-pill-green">${iconSvg('check', 'pic')} Already Covered (Direct Principal)</div>`
       : badge === 'partial'
-        ? `<div class="id-pill id-pill-blue">${iconSvg('shield', 'pic')} Partially Covered</div>`
+        ? `<div class="id-pill id-pill-blue">${iconSvg('shield', 'pic')} Partially Covered (Direct Principal)</div>`
         : '';
 
   const resolutionFailed =
     !isKnown && !policy.applicationId ? '<div class="id-failed">Resolution Failed</div>' : '';
+  const compoundWarning = compound
+    ? `<div class="banner banner-warning"><div class="banner-title">${iconSvg('alert', 'bic')} Manual migration required</div>These permission-only recommendations cannot preserve the application restriction of a compound policy. PowerShell export skips this identity.</div>`
+    : '';
 
   const identityCol = `<div class="col-identity">
       <div class="id-ico ${isKnown ? 'id-ico-known' : 'id-ico-unknown'}">${iconSvg(identityIconKind(compound, currentType), 'w4')}</div>
@@ -262,6 +269,7 @@ const renderIdentityCard = (
         ${meta}
         ${coverageBadge}
         ${resolutionFailed}
+        ${compoundWarning}
         <button class="link-toggle" data-action="toggle" data-target="lp-${rowId}" data-more="View Legacy Policy" data-less="Hide Legacy Policy">View Legacy Policy</button>
         ${renderLegacyPolicy(policy.permissions, rowId)}
       </div>
@@ -324,7 +332,12 @@ const renderIdentityCard = (
     </div>`;
 };
 
-const renderChart = (data: CoverageChartDatum[]): string => {
+interface ReportChartRow {
+  selectedIdx: number;
+  strategies: CoverageChartDatum[];
+}
+
+const renderChart = (data: ReportChartRow[]): string => {
   const leftPad = 44;
   const topPad = 12;
   const plotH = 260;
@@ -350,38 +363,45 @@ const renderChart = (data: CoverageChartDatum[]): string => {
     );
   });
 
-  data.forEach((d, i) => {
+  data.forEach((row, i) => {
     const center = leftPad + i * band + band / 2;
 
-    const metrics = activeCoverageSegments(d);
-    const groupW = coverageGroupWidth(metrics.length);
-    const startX = center - groupW / 2;
+    row.strategies.forEach((d, strategyIdx) => {
+      parts.push(`<g class="chart-strat" data-row="row${i}" data-idx="${strategyIdx}" data-coverage="${esc(d.coveragePct)}" data-missing="${esc(d.rawMissing)}" data-excess="${esc(d.rawExcess)}"${strategyIdx === row.selectedIdx ? '' : ' hidden'}>`);
+      parts.push(`<title>${esc(d.name)} — ${esc(d.strategy)}: ${esc(d.role)}</title>`);
+      const metrics = activeCoverageSegments(d);
+      const groupW = coverageGroupWidth(metrics.length);
+      const startX = center - groupW / 2;
 
-    metrics.forEach((m, j) => {
-      const x = startX + j * (barW + gap);
-      const h = (m.value / 100) * plotH;
-      const y = baseY - h;
-      parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${m.bar}" />`);
+      metrics.forEach((m, j) => {
+        const x = startX + j * (barW + gap);
+        const h = (m.value / 100) * plotH;
+        const y = baseY - h;
+        parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${m.bar}" />`);
 
-      const place = coverageLabelPlacement(x, y, h, barW);
+        const place = coverageLabelPlacement(x, y, h, barW);
+        parts.push(
+          `<text x="${place.x}" y="${place.y}" fill="${m.label}" stroke="${m.bar}" stroke-width="3" style="paint-order:stroke fill" font-size="12" font-weight="900" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" transform="rotate(-90, ${place.x}, ${place.y})">${m.value}%</text>`
+        );
+      });
+
+      const label = d.name.length > 12 ? `${d.name.substring(0, 12)}...` : d.name;
+      const lx = center;
+      const ly = baseY + 14;
       parts.push(
-        `<text x="${place.x}" y="${place.y}" fill="${m.label}" stroke="${m.bar}" stroke-width="3" style="paint-order:stroke fill" font-size="12" font-weight="900" text-anchor="${place.anchor}" dominant-baseline="${place.baseline}" transform="rotate(-90, ${place.x}, ${place.y})">${m.value}%</text>`
+        `<text x="${lx}" y="${ly}" text-anchor="end" font-size="10" fill="var(--chart-axis)" transform="rotate(-45, ${lx}, ${ly})">${esc(label)}</text>`
       );
+      parts.push('</g>');
     });
-
-    const label = d.name.length > 12 ? `${d.name.substring(0, 12)}...` : d.name;
-    const lx = center;
-    const ly = baseY + 14;
-    parts.push(
-      `<text x="${lx}" y="${ly}" text-anchor="end" font-size="10" fill="var(--chart-axis)" transform="rotate(-45, ${lx}, ${ly})">${esc(label)}</text>`
-    );
   });
 
   return `<div class="chart-scroll"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Coverage distribution chart">${parts.join('')}</svg></div>`;
 };
 
-const renderOverview = (data: CoverageChartDatum[]): string => {
-  const { avgCoverage: avg, totalMissing, totalExcess } = coverageOverviewStats(data);
+const renderOverview = (data: ReportChartRow[]): string => {
+  const { avgCoverage: avg, totalMissing, totalExcess } = coverageOverviewStats(
+    data.map((row) => row.strategies[row.selectedIdx])
+  );
 
   return `<div class="overview">
       <div class="chart-card">
@@ -389,9 +409,9 @@ const renderOverview = (data: CoverageChartDatum[]): string => {
         ${renderChart(data)}
       </div>
       <div class="stat-cards">
-        <div class="stat-card"><div class="stat-value">${avg}%</div><div class="stat-label">Average Coverage</div></div>
-        <div class="stat-card"><div class="stat-value">${totalMissing}</div><div class="stat-label">Total Missing Permissions</div></div>
-        <div class="stat-card"><div class="stat-value">${totalExcess}</div><div class="stat-label">Total Excess Permissions</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-average">${avg}%</div><div class="stat-label">Average Coverage</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-missing">${totalMissing}</div><div class="stat-label">Total Missing Permissions</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-excess">${totalExcess}</div><div class="stat-label">Total Excess Permissions</div></div>
       </div>
     </div>`;
 };
@@ -485,7 +505,7 @@ html.dark .id-pill-blue{background:rgba(30,64,175,.2);color:#93c5fd;border-color
 .tab{padding:4px 8px;border-radius:2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border:1px solid var(--tab-border);background:var(--tab-bg);color:var(--tab-text);cursor:pointer}
 .tab:hover{color:var(--text)}
 .tab-active{background:var(--brand-bg);border-color:var(--brand-border);color:var(--brand-text)}
-.strat[hidden]{display:none}
+.strat[hidden],.chart-strat[hidden]{display:none}
 .role-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .role-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:4px;background:var(--chip-bg);border:1px solid var(--chip-border);font-size:12px;font-weight:500;color:var(--chip-text)}
 .role-name{font-weight:600;font-size:14px}
@@ -504,8 +524,10 @@ html.dark .complete{color:#6ccb6c}
 .banner{padding:8px;border-radius:4px;font-size:12px;margin-bottom:8px}
 .banner-green{background:#f0faef;border:1px solid #c5ebc3}
 .banner-blue{background:#eff6ff;border:1px solid #cfe3ff}
+.banner-warning{background:#fff4ce;border:1px solid #f6e2a6;color:#8a6d3b;margin-top:8px}
 html.dark .banner-green{background:rgba(16,124,16,.12);border-color:#0b5a0b}
 html.dark .banner-blue{background:rgba(30,64,175,.15);border-color:#1e40af}
+html.dark .banner-warning{background:rgba(120,53,15,.3);border-color:#78350f;color:#fbbf24}
 .banner-title{display:flex;align-items:center;gap:4px;font-weight:600;margin-bottom:6px}
 .banner-green .banner-title{color:#0b6a0b}
 .banner-blue .banner-title{color:#1e40af}
@@ -541,6 +563,7 @@ html.dark .pv-excess-priv{background:rgba(120,53,15,.6);color:#fde68a;border-col
 .pv-more{font-size:10px;color:var(--text-mute);font-style:italic;padding-left:4px;align-self:center}
 .pv-block.expanded .pv-more{display:none}
 .footer{text-align:center;font-size:11px;color:var(--text-mute);padding:16px 0 4px}
+.coverage-note{font-size:12px;color:var(--text-soft);margin:0 0 16px}
 @media(max-width:1199px){
   .mapping-head{display:none}
   .id-row{grid-template-columns:1fr;gap:20px}
@@ -578,15 +601,22 @@ const buildScript = (): string => {
     '(function(){',
     'var SUN=' + sun + ';var MOON=' + moon + ';',
     'var root=document.documentElement;',
+    'function updateOverview(){',
+    'var bars=document.querySelectorAll(\'.chart-strat:not([hidden])\'),coverage=0,missing=0,excess=0;',
+    "for(var i=0;i<bars.length;i++){coverage+=Number(bars[i].getAttribute('data-coverage'));missing+=Number(bars[i].getAttribute('data-missing'));excess+=Number(bars[i].getAttribute('data-excess'));}",
+    "document.getElementById('stat-average').textContent=Math.round(coverage/(bars.length||1))+'%';",
+    "document.getElementById('stat-missing').textContent=String(missing);",
+    "document.getElementById('stat-excess').textContent=String(excess);",
+    '}',
     "document.addEventListener('click',function(e){",
     "var t=e.target.closest('[data-action]');if(!t)return;",
     "var a=t.getAttribute('data-action');",
     "if(a==='theme'){var d=root.classList.toggle('dark');t.innerHTML=d?SUN:MOON;t.setAttribute('title',d?'Switch to light mode':'Switch to dark mode');return;}",
     "if(a==='tab'){var row=t.getAttribute('data-row'),idx=t.getAttribute('data-idx');",
-    "var ss=document.querySelectorAll('.strat[data-row=\"'+row+'\"]');",
-    "for(var i=0;i<ss.length;i++){ss[i].hidden=ss[i].getAttribute('data-idx')!==idx;}",
+    "var ss=document.querySelectorAll('.strat[data-row=\"'+row+'\"],.chart-strat[data-row=\"'+row+'\"]');",
+    "for(var i=0;i<ss.length;i++){ss[i].toggleAttribute('hidden',ss[i].getAttribute('data-idx')!==idx);}",
     "var tabs=t.parentNode.querySelectorAll('.tab');",
-    "for(var j=0;j<tabs.length;j++){tabs[j].classList.toggle('tab-active',tabs[j]===t);}return;}",
+    "for(var j=0;j<tabs.length;j++){tabs[j].classList.toggle('tab-active',tabs[j]===t);}updateOverview();return;}",
     "var el=document.getElementById(t.getAttribute('data-target'));if(!el)return;",
     "if(a==='toggle'){var o=el.classList.toggle('open');t.textContent=o?t.getAttribute('data-less'):t.getAttribute('data-more');return;}",
     "if(a==='expand'){var x=el.classList.toggle('expanded');t.textContent=x?t.getAttribute('data-less'):t.getAttribute('data-more');return;}",
@@ -605,7 +635,16 @@ export const exportToHtml = (
 ): string => {
   const grouped = groupResultsByType(results, resolvedNames);
   const ordered = flattenInDisplayOrder(grouped);
-  const chartData = toCoverageChartData(ordered, selectedRoles, resolvedNames);
+  // Pre-render every strategy with shared chart helpers; the standalone script only switches visibility.
+  const chartData: ReportChartRow[] = ordered.map((res) => {
+    const key = getPolicyKey(res.originalPolicy);
+    return {
+      selectedIdx: selectedStrategyIndex(res, selectedRoles),
+      strategies: res.recommendations.length
+        ? res.recommendations.map((_, i) => toCoverageChartData([res], { [key]: i }, resolvedNames)[0])
+        : toCoverageChartData([res], {}, resolvedNames),
+    };
+  });
 
   const groupDefs = IDENTITY_DISPLAY_GROUPS.map((group) => ({
     label: group.label,
@@ -666,6 +705,7 @@ export const exportToHtml = (
     </div>
     <div class="ws-body">
       ${renderOverview(chartData)}
+      <p class="coverage-note">Existing coverage reflects direct-principal role assignments only. Group membership and management-group effective access are not calculated.</p>
       <div>
         <h3 class="mapping-title">Identity Mapping</h3>
         <div class="mapping">

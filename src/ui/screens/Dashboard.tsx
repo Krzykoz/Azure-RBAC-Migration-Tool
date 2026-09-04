@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { MigrationStatus, KeyVault, RoleDefinition } from '../../core/types';
+import { MigrationStatus, KeyVault, RoleDefinition, Subscription } from '../../core/types';
 import { useAzureData } from '../hooks/useAzureData';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { useExport, ExportFormat } from '../hooks/useExport';
@@ -28,6 +28,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   offlineData,
 }) => {
   const [includeCustomRoles, setIncludeCustomRoles] = useState(true);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const {
     subscriptions,
@@ -40,6 +41,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     roleAssignments,
     resolvedNames,
     status,
+    error: azureError,
     setStatus,
     resolveIdentities,
   } = useAzureData({ armToken, graphToken, offlineData });
@@ -66,7 +68,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     resolvedNames,
     selectedForExport,
     vaultName: selectedVault?.name || '',
-    subscriptionId: selectedSub?.subscriptionId || '',
+    subscriptionId: selectedVault?.id.match(/^\/subscriptions\/([^/]+)\//i)?.[1] || selectedSub?.subscriptionId || '',
     vaultResourceId: selectedVault?.id || '',
     theme,
   });
@@ -92,13 +94,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   useEffect(() => {
     if (results.length > 0 && !offlineData) {
       const idsToResolve: string[] = [];
+      const applicationIds: string[] = [];
       results.forEach((r) => {
         idsToResolve.push(r.originalPolicy.objectId);
         if (isCompoundIdentity(r.originalPolicy)) {
-          idsToResolve.push(r.originalPolicy.applicationId!);
+          applicationIds.push(r.originalPolicy.applicationId!);
         }
       });
-      resolveIdentities(idsToResolve);
+      resolveIdentities(idsToResolve, applicationIds);
     }
   }, [results, offlineData, resolveIdentities]);
 
@@ -134,33 +137,46 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [resolvedNames, results, setSelectedForExport]);
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = () => {
     if (!selectedVault) return;
+    setAnalysisError(null);
     setStatus(MigrationStatus.ANALYZING);
 
     try {
-      await runAnalysis();
+      runAnalysis();
       setStatus(MigrationStatus.COMPLETE);
     } catch (err) {
       console.error(err);
+      setAnalysisError(err instanceof Error ? err.message : 'Analysis failed.');
       setStatus(MigrationStatus.ERROR);
     }
   };
 
   const handleSelectVault = (vault: KeyVault) => {
     setSelectedVault(vault);
+    setAnalysisError(null);
+    setShowExportMenu(false);
     setStatus(MigrationStatus.IDLE);
     clearResults();
   };
 
-  const resetToSubscriptions = () => {
-    setSelectedSub(null);
+  const handleSelectSubscription = (sub: Subscription | null) => {
+    if (sub === selectedSub) return;
+    setSelectedSub(sub);
     setSelectedVault(null);
+    setAnalysisError(null);
+    setShowExportMenu(false);
+    setStatus(sub ? MigrationStatus.LOADING : MigrationStatus.IDLE);
     clearResults();
   };
 
+  const resetToSubscriptions = () => handleSelectSubscription(null);
+
   const resetToVaults = () => {
     setSelectedVault(null);
+    setAnalysisError(null);
+    setShowExportMenu(false);
+    if (status !== MigrationStatus.LOADING) setStatus(MigrationStatus.IDLE);
     clearResults();
   };
 
@@ -219,7 +235,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <SidePanel
           subscriptions={subscriptions}
           selectedSub={selectedSub}
-          onSelectSub={setSelectedSub}
+          onSelectSub={handleSelectSubscription}
           vaults={vaults}
           selectedVault={selectedVault}
           onSelectVault={handleSelectVault}
@@ -239,6 +255,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="relative w-full sm:w-auto" ref={exportMenuRef}>
                   <button
                     onClick={() => setShowExportMenu(!showExportMenu)}
+                    aria-expanded={showExportMenu}
                     className="w-full px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 transition-colors sm:w-auto"
                   >
                     <DownloadIcon className="w-4 h-4" /> Export
@@ -272,7 +289,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         onChange={(e) => setIncludeCustomRoles(e.target.checked)}
                         disabled={
                           status === MigrationStatus.ANALYZING ||
-                          status === MigrationStatus.COMPLETE
+                          status === MigrationStatus.COMPLETE ||
+                          status === MigrationStatus.LOADING ||
+                          !!azureError
                         }
                       />
                       <div className="w-9 h-5 bg-neutral-300 dark:bg-neutral-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
@@ -293,7 +312,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     onClick={handleAnalyze}
                     disabled={
                       status === MigrationStatus.ANALYZING ||
-                      status === MigrationStatus.COMPLETE
+                      status === MigrationStatus.COMPLETE ||
+                      status === MigrationStatus.LOADING ||
+                      !!azureError
                     }
                     className={`w-full justify-center px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 sm:w-auto ${status === MigrationStatus.COMPLETE
                         ? 'bg-green-600 text-white cursor-default'
@@ -324,6 +345,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           {/* Workspace Content */}
           <div className="min-w-0 p-4 sm:p-6 flex-1">
+            {status === MigrationStatus.ERROR && (
+              <div role="alert" className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">
+                <p className="font-semibold">{analysisError || azureError || 'Unable to complete the operation.'}</p>
+                <p className="mt-2">Select another subscription or vault, or sign out and reconnect with a fresh token.</p>
+              </div>
+            )}
             {/* Empty State - No Vault Selected */}
             {status === MigrationStatus.IDLE && !selectedVault && (
               <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 dark:text-neutral-400">
@@ -402,7 +429,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   Mapping Roles...
                 </p>
                 <p className="text-sm text-neutral-700 dark:text-neutral-400 mt-2 max-w-md text-center">
-                  Applying 3 weighted algorithmic strategies to determine optimal RBAC mappings.
+                  Applying 3 weighted strategies to suggest RBAC mappings.
                 </p>
               </div>
             )}

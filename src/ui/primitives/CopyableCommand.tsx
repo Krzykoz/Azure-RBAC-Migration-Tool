@@ -12,20 +12,22 @@ export const CopyableCommand: React.FC<CopyableCommandProps> = ({ command, comma
   const { copyToClipboard, isCopied } = useClipboard();
 
   return (
-    <div
+    <button
+      type="button"
+      aria-label={`Copy command: ${command}`}
       onClick={() => copyToClipboard(command, commandId)}
-      className="bg-neutral-100 dark:bg-neutral-900/50 p-2 rounded mb-2 border border-neutral-200 dark:border-neutral-700 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors group relative"
+      className="w-full text-left bg-neutral-100 dark:bg-neutral-900/50 p-2 rounded mb-2 border border-neutral-200 dark:border-neutral-700 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors group relative"
     >
       <code className="block font-mono text-[10px] text-brand-700 dark:text-brand-300 break-all select-all pr-8">
         {command}
       </code>
-      <div className="absolute top-1/2 right-2 transform -translate-y-1/2 flex items-center gap-1">
+      <span aria-hidden="true" className="absolute top-1/2 right-2 transform -translate-y-1/2 flex items-center gap-1">
         {isCopied(commandId) ? (
           <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400 icon-pop" />
         ) : (
           <CopyIcon className="w-4 h-4 text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-700 dark:group-hover:text-white transition-all duration-200" />
         )}
-      </div>
-    </div>
+      </span>
+    </button>
   );
 };

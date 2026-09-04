@@ -19,11 +19,11 @@ const csvCell = (value: string | number): string => {
 };
 
 // Escape a value for a PowerShell double-quoted string literal.
-// Backtick is the PS escape char, and `"` / `$` are special inside double quotes; newlines are flattened.
+// PowerShell recognizes smart double quotes as delimiters too; escape them before interpolation.
 const psEscape = (value: string | number): string =>
   String(value ?? '')
     .replace(/`/g, '``')
-    .replace(/"/g, '`"')
+    .replace(/["\u201c\u201d\u201e]/g, '`$&')
     .replace(/\$/g, '`$')
     .replace(/[\r\n]+/g, ' ');
 
@@ -97,14 +97,33 @@ export const exportToJSON = (
   return JSON.stringify(exportData, null, 2);
 };
 
+/** Validate a full vault scope syntactically; this does not verify its existence in Azure. */
+export const parseVaultResourceId = (
+  resourceId: string
+): { subscriptionId: string; vaultName: string } => {
+  const match = /^\/subscriptions\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/resourceGroups\/([^/]+)\/providers\/Microsoft\.KeyVault\/vaults\/([a-z][a-z0-9-]{1,22}[a-z0-9])$/i.exec(resourceId);
+  if (
+    !match || match[0] !== resourceId
+    || !/^[\p{L}\p{N}_.()-]{1,90}$/u.test(match[2])
+    || match[2].endsWith('.') || match[3].includes('--')
+  ) {
+    throw new Error(
+      'Provide a valid full Key Vault resource ID: /subscriptions/<subscription-guid>/resourceGroups/<resource-group>/providers/Microsoft.KeyVault/vaults/<vault-name>. Copy the Resource ID from the target vault in Azure; offline placeholder scopes cannot be used for PowerShell export.'
+    );
+  }
+  return { subscriptionId: match[1], vaultName: match[3] };
+};
+
 export const exportToPowerShell = (
   results: MigrationAnalysis[],
   selectedRoles: Record<string, number>,
   resolvedNames: Record<string, { name: string; type: IdentityType }>,
-  vaultName: string,
-  subscriptionId: string,
+  _vaultName: string,
+  _subscriptionId: string,
   vaultResourceId?: string
 ): string => {
+  const scope = vaultResourceId || '';
+  const { vaultName, subscriptionId } = parseVaultResourceId(scope);
   const script = [`# Azure Key Vault RBAC Migration Script
 # Generated: ${new Date().toISOString()}
 # Vault: ${psComment(vaultName)}
@@ -112,14 +131,14 @@ export const exportToPowerShell = (
 
 # WARNING: Review this script carefully before running!
 # This script will create role assignments for the Key Vault.
+# Authenticate with Connect-AzAccount in the target tenant before running.
 
+$ErrorActionPreference = "Stop"
 $vaultName = "${psEscape(vaultName)}"
 $subscriptionId = "${psEscape(subscriptionId)}"
-$scope = "${psEscape(vaultResourceId || '')}"
+$scope = "${psEscape(scope)}"
 
-# Get the Key Vault resource
-$vault = Get-AzKeyVault -VaultName $vaultName
-if (-not $scope) { $scope = $vault.ResourceId }
+Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop | Out-Null
 
 Write-Host "Starting RBAC migration for Key Vault: $vaultName" -ForegroundColor Green
 Write-Host ""
@@ -153,19 +172,38 @@ Write-Host ""
   });
 
   const generateIdentityScript = (r: MigrationAnalysis) => {
+    const { displayName } = describeIdentity(r.originalPolicy, resolvedNames, { fallbackName: 'Unknown' });
+    script.push(`# ${psComment(displayName ?? 'Unknown')} (${psComment(r.originalPolicy.objectId)})`);
+
+    if (isCompoundIdentity(r.originalPolicy)) {
+      script.push(`# SKIPPED: Compound policy (applicationId: ${psComment(r.originalPolicy.applicationId!)}) requires manual migration. RBAC role assignments cannot preserve the application restriction; no assignment emitted.`);
+      script.push('');
+      return;
+    }
+    if (r.existingCoverage?.isFullyCovered) {
+      script.push('# SKIPPED: Already fully covered by existing direct-principal RBAC assignments; no additional assignment needed.');
+      script.push('');
+      return;
+    }
+
     const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
     const rec = r.recommendations[selectedIdx];
-    const { displayName } = describeIdentity(r.originalPolicy, resolvedNames, { fallbackName: 'Unknown' });
-
-    script.push(`# ${psComment(displayName ?? 'Unknown')} (${psComment(r.originalPolicy.objectId)})`);
     script.push(`# Strategy: ${psComment(rec.strategy)} | Confidence: ${rec.confidence}%`);
 
     if (rec.roleNames && rec.roleNames.length > 0) {
+      const existingRoles = new Set(
+        r.existingCoverage?.roleMatches.map((match) => match.roleName.toLowerCase()) || []
+      );
       rec.roleNames.forEach((roleName) => {
+        if (existingRoles.has(roleName.toLowerCase())) {
+          script.push(`# SKIPPED: Role "${psComment(roleName)}" is already present in direct-principal RBAC coverage; no duplicate assignment emitted.`);
+          return;
+        }
         script.push(`New-AzRoleAssignment \``);
         script.push(`  -ObjectId "${psEscape(r.originalPolicy.objectId)}" \``);
         script.push(`  -RoleDefinitionName "${psEscape(roleName)}" \``);
-        script.push(`  -Scope $scope`);
+        script.push(`  -Scope $scope \``);
+        script.push(`  -ErrorAction Stop`);
       });
     } else {
       script.push(`# No matching role found for this identity`);

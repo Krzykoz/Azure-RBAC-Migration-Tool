@@ -13,7 +13,7 @@ const COMPOUND_IDENTITY_LABEL = 'Compound Identity' as const;
 type DisplayIdentityType = IdentityType | typeof COMPOUND_IDENTITY_LABEL;
 
 /**
- * A compound identity is a service principal acting on behalf of an application:
+ * A compound identity restricts a principal to acting through a particular application:
  * it carries both an `objectId` and a non-empty `applicationId`.
  */
 export const isCompoundIdentity = (
