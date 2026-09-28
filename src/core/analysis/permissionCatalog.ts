@@ -1,4 +1,5 @@
 import { AccessPolicyEntry } from '../types';
+import { isExcludedFromAll } from '../permissions/legacy';
 import RBAC_MAPPING_CSV from '../../assets/accessPolicyRbacMapping.csv?raw';
 
 /**
@@ -91,11 +92,10 @@ const expandRequiredActions = (map: PermissionMap, policy: AccessPolicyEntry): S
         throw new Error(`Permissions for ${resourceType} must be an array of strings.`);
       }
       const verb = perm.toLowerCase();
-      // "all"/"*" grants every mapped action in the category.
       if (verb === 'all' || verb === '*') {
-        Object.values(categoryMap).forEach((rbacList) =>
-          rbacList.forEach((action) => actions.add(action))
-        );
+        Object.entries(categoryMap).forEach(([mappedVerb, rbacList]) => {
+          if (!isExcludedFromAll(mappedVerb)) rbacList.forEach((action) => actions.add(action));
+        });
       } else {
         if (!Object.hasOwn(categoryMap, verb)) {
           throw new Error(`Unsupported permission: ${resourceType}/${perm}. Update the permission mapping before migrating.`);

@@ -20,10 +20,11 @@ export const LEGACY_KEY_VAULT_PERMISSIONS: Record<string, string[]> = {
   ],
 };
 
-// "All" in a category implies all standard permissions, excluding "Purge" which is privileged.
-export const KEY_VAULT_ALL_PERMISSIONS: Record<string, string[]> = {
-  keys: LEGACY_KEY_VAULT_PERMISSIONS.keys.filter((p) => p !== 'Purge' && p !== 'Release'),
-  secrets: LEGACY_KEY_VAULT_PERMISSIONS.secrets.filter((p) => p !== 'Purge'),
-  certificates: LEGACY_KEY_VAULT_PERMISSIONS.certificates.filter((p) => p !== 'Purge'),
-  storage: LEGACY_KEY_VAULT_PERMISSIONS.storage.filter((p) => p !== 'Purge'),
-};
+/** Privileged verbs an access policy's "all" does not grant; they must be listed explicitly. */
+export const isExcludedFromAll = (permission: string): boolean =>
+  ['purge', 'release'].includes(permission.toLowerCase());
+
+/** What "all" in each category expands to. */
+export const KEY_VAULT_ALL_PERMISSIONS: Record<string, string[]> = Object.fromEntries(
+  Object.entries(LEGACY_KEY_VAULT_PERMISSIONS).map(([category, perms]) => [category, perms.filter((p) => !isExcludedFromAll(p))])
+);

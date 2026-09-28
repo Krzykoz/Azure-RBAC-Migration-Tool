@@ -37,15 +37,15 @@ describe('analyzePolicies — legacy verb → RBAC expansion', () => {
     expect(rec.missingPermissions).toEqual([]);
   });
 
-  it('treats "All" in a category as every mapped action in that category', () => {
+  it('treats "All" in a category as every mapped action except privileged Purge', () => {
     const policy = makePolicy({ secrets: ['All'] });
     const admin = makeRole('Admin', [ACTIONS.VAULT_WILDCARD]);
 
     const [analysis] = analyzePolicies([policy], [admin]);
     const rec = analysis.recommendations[0];
-    // Secrets category has 8 mapped actions in the CSV; all should be covered by vaults/*.
     expect(rec.coveredPermissions).toContain(ACTIONS.SECRET_GET);
-    expect(rec.coveredPermissions).toContain(ACTIONS.SECRET_PURGE);
+    expect(rec.coveredPermissions).not.toContain(ACTIONS.SECRET_PURGE);
+    expect(rec.excessPermissions).toContain(ACTIONS.SECRET_PURGE);
     expect(rec.missingPermissions).toEqual([]);
     expect(rec.confidence).toBe(100);
   });

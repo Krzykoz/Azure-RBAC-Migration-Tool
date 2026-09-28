@@ -13,9 +13,6 @@ import { makePolicy } from '../../../testing/factories';
 const roles = getBuiltInKeyVaultRoles();
 const EPSILON = 1e-9;
 
-const allOf = (category: string) =>
-  LEGACY_KEY_VAULT_PERMISSIONS[category].filter((p) => p !== 'Purge' && p !== 'Release');
-
 const defaultPick = (permissions: AccessPolicyEntry['permissions']) => {
   const [analysis] = analyzePolicies([makePolicy(permissions)], roles);
   return analysis.recommendations[pickRecommendedIndex(analysis.recommendations)];
@@ -24,12 +21,12 @@ const defaultPick = (permissions: AccessPolicyEntry['permissions']) => {
 // Access-policy templates mapped to built-in roles by Microsoft:
 // https://learn.microsoft.com/azure/key-vault/general/rbac-migration#access-policy-templates-to-azure-roles-mapping
 const MICROSOFT_TEMPLATES: Array<[string, AccessPolicyEntry['permissions'], string[]]> = [
-  ['Key, Secret, Certificate Management', { keys: allOf('keys'), secrets: allOf('secrets'), certificates: allOf('certificates') }, ['Key Vault Administrator']],
-  ['Key & Secret Management', { keys: allOf('keys'), secrets: allOf('secrets') }, ['Key Vault Crypto Officer', 'Key Vault Secrets Officer']],
-  ['Secret & Certificate Management', { secrets: allOf('secrets'), certificates: allOf('certificates') }, ['Key Vault Certificates Officer', 'Key Vault Secrets Officer']],
-  ['Key Management', { keys: allOf('keys') }, ['Key Vault Crypto Officer']],
-  ['Secret Management', { secrets: allOf('secrets') }, ['Key Vault Secrets Officer']],
-  ['Certificate Management', { certificates: allOf('certificates') }, ['Key Vault Certificates Officer']],
+  ['Key, Secret, Certificate Management', { keys: ['All'], secrets: ['All'], certificates: ['All'] }, ['Key Vault Administrator']],
+  ['Key & Secret Management', { keys: ['All'], secrets: ['All'] }, ['Key Vault Crypto Officer', 'Key Vault Secrets Officer']],
+  ['Secret & Certificate Management', { secrets: ['All'], certificates: ['All'] }, ['Key Vault Certificates Officer', 'Key Vault Secrets Officer']],
+  ['Key Management', { keys: ['All'] }, ['Key Vault Crypto Officer']],
+  ['Secret Management', { secrets: ['All'] }, ['Key Vault Secrets Officer']],
+  ['Certificate Management', { certificates: ['All'] }, ['Key Vault Certificates Officer']],
   ['SQL Server Connector / Exchange Online Customer Key', { keys: ['Get', 'List', 'WrapKey', 'UnwrapKey'] }, ['Key Vault Crypto Service Encryption User']],
 ];
 
