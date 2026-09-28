@@ -131,6 +131,7 @@ export const exportToPowerShell = (
 
 # WARNING: Review this script carefully before running!
 # This script will create role assignments for the Key Vault.
+# Safe to re-run: assignments already effective at the vault are skipped.
 # Authenticate with Connect-AzAccount in the target tenant before running.
 
 $ErrorActionPreference = "Stop"
@@ -199,11 +200,18 @@ Write-Host ""
           script.push(`# SKIPPED: Role "${psComment(roleName)}" is already present in direct-principal RBAC coverage; no duplicate assignment emitted.`);
           return;
         }
-        script.push(`New-AzRoleAssignment \``);
-        script.push(`  -ObjectId "${psEscape(r.originalPolicy.objectId)}" \``);
-        script.push(`  -RoleDefinitionName "${psEscape(roleName)}" \``);
-        script.push(`  -Scope $scope \``);
-        script.push(`  -ErrorAction Stop`);
+        const objectId = psEscape(r.originalPolicy.objectId);
+        const role = psEscape(roleName);
+        // Re-runnable: skip assignments already effective at the vault (at or above its scope).
+        script.push(`if (Get-AzRoleAssignment -ObjectId "${objectId}" -RoleDefinitionName "${role}" -Scope $scope -ErrorAction Stop) {`);
+        script.push(`  Write-Host "Already assigned: ${role} -> ${objectId}"`);
+        script.push(`} else {`);
+        script.push(`  New-AzRoleAssignment \``);
+        script.push(`    -ObjectId "${objectId}" \``);
+        script.push(`    -RoleDefinitionName "${role}" \``);
+        script.push(`    -Scope $scope \``);
+        script.push(`    -ErrorAction Stop | Out-Null`);
+        script.push(`}`);
       });
     } else {
       script.push(`# No matching role found for this identity`);

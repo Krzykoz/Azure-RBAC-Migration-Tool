@@ -280,9 +280,17 @@ describe('exportToPowerShell', () => {
       expect(ps).toContain('-RoleDefinitionName "Key Vault Crypto User"');
       expect(ps).toContain('-ObjectId "partial"');
       expect(ps.match(/New-AzRoleAssignment/g)).toHaveLength(1);
-      expect(ps).toContain('-Scope $scope `\n  -ErrorAction Stop');
+      expect(ps).toContain('-Scope $scope `\n    -ErrorAction Stop');
     }
   );
+
+  it('guards each assignment so a partially failed run can be re-run', () => {
+    const ps = exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, 'v', 's', vaultResourceId);
+    const guard = 'if (Get-AzRoleAssignment -ObjectId "u1" -RoleDefinitionName "Key Vault Secrets User" -Scope $scope -ErrorAction Stop) {';
+    expect(ps).toContain(guard);
+    expect(ps.indexOf(guard)).toBeLessThan(ps.indexOf('New-AzRoleAssignment'));
+    expect(ps).toContain('Write-Host "Already assigned: Key Vault Secrets User -> u1"');
+  });
 
   it('requires an explicit full scope instead of looking up or inventing an offline target', () => {
     expect(() => exportToPowerShell([], {}, {}, 'myvault', subscriptionId))
@@ -306,7 +314,8 @@ describe('exportToPowerShell', () => {
     expect(ps).not.toContain('Get-AzKeyVault');
     expect(ps).toContain('$ErrorActionPreference = "Stop"');
     expect(ps).toContain('Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop | Out-Null');
-    expect(ps).toContain('-Scope $scope `\n  -ErrorAction Stop');
+    expect(ps).toContain('-Scope $scope `\n    -ErrorAction Stop');
+    expect(ps.indexOf('Set-AzContext')).toBeLessThan(ps.indexOf('Get-AzRoleAssignment'));
     expect(ps.indexOf('Set-AzContext')).toBeLessThan(ps.indexOf('New-AzRoleAssignment'));
     expect(ps.indexOf('-Scope $scope')).toBeLessThan(ps.indexOf('Migration script completed'));
   });
