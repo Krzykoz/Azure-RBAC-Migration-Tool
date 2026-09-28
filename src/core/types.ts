@@ -6,7 +6,6 @@
 export enum MigrationStatus {
   IDLE = 'IDLE',
   LOADING = 'LOADING',
-  ANALYZING = 'ANALYZING',
   COMPLETE = 'COMPLETE',
   ERROR = 'ERROR',
 }
@@ -110,11 +109,7 @@ export interface ExistingCoverageResult {
   missingPermissions: string[];
   /** Permissions already granted via RBAC that weren't in the policy. */
   excessPermissions: string[];
-  roleMatches: Array<{
-    roleName: string;
-    covered: string[];
-    excess: string[];
-  }>;
+  roleMatches: RoleBreakdown[];
 }
 
 export interface MigrationAnalysis {

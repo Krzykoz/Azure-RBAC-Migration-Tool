@@ -147,7 +147,7 @@ describe('useAzureData request ownership', () => {
     await settle();
     expect(render()).toMatchObject({ vaults: [vault], availableRoles: [role], roleAssignments: [assignment] });
     expect(getRoleAssignments).toHaveBeenCalledTimes(1);
-    expect(getKeyVaults).toHaveBeenCalledWith('second', 'a', [assignment]);
+    expect(getKeyVaults).toHaveBeenCalledWith('second', 'a', [assignment], expect.any(AbortSignal));
 
     vi.mocked(getRoleDefinitions).mockRejectedValueOnce(new Error('roles denied'));
     render().setSelectedSub(otherSub);
@@ -174,6 +174,7 @@ describe('useAzureData request ownership', () => {
     await settle();
     render().setSelectedSub(null);
     render();
+    expect(vi.mocked(getKeyVaults).mock.calls[0][3]?.aborted).toBe(true);
     oldVaults.reject(new Error('old vault failed'));
     await settle();
     expect(render()).toMatchObject({ error: null, vaults: [], status: MigrationStatus.IDLE });
@@ -187,6 +188,7 @@ describe('useAzureData request ownership', () => {
     render();
     token = 'new';
     render();
+    expect(vi.mocked(getSubscriptions).mock.calls[0][1]?.aborted).toBe(true);
     await settle();
     oldSubs.resolve([{ ...sub, displayName: 'Stale' }]);
     await settle();
@@ -205,7 +207,7 @@ describe('useAzureData request ownership', () => {
     render();
     await settle();
     const pending = render().resolveIdentities(['p'], ['app']);
-    expect(resolveBatchIdentities).toHaveBeenCalledWith(['p'], 'graph', ['app']);
+    expect(resolveBatchIdentities).toHaveBeenCalledWith(['p'], 'graph', ['app'], expect.any(AbortSignal));
     if (change === 'subscription') {
       render().setSelectedSub(otherSub);
       render();
@@ -215,6 +217,7 @@ describe('useAzureData request ownership', () => {
     } else {
       hooks.unmount();
     }
+    expect(vi.mocked(resolveBatchIdentities).mock.calls[0][3]?.aborted).toBe(true);
     names.resolve({ p: { name: 'Old name', type: 'User' } });
     await pending;
     expect(render().resolvedNames).toEqual({});

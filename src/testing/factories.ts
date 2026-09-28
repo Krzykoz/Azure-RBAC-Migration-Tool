@@ -69,6 +69,7 @@ export const ACTIONS = {
   SECRET_SET: 'Microsoft.KeyVault/vaults/secrets/setSecret/action',
   SECRET_UPDATE: 'Microsoft.KeyVault/vaults/secrets/update/action',
   SECRET_DELETE: 'Microsoft.KeyVault/vaults/secrets/delete',
+  SECRET_RECOVER: 'Microsoft.KeyVault/vaults/secrets/recover/action',
   SECRET_PURGE: 'Microsoft.KeyVault/vaults/secrets/purge/action',
   KEY_READ: 'Microsoft.KeyVault/vaults/keys/read',
   SECRETS_WILDCARD: 'Microsoft.KeyVault/vaults/secrets/*',

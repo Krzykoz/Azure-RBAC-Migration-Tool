@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { exportToCSV, exportToJSON, exportToPowerShell, parseVaultResourceId } from '../tabular';
 import { MigrationAnalysis, SuggestedRole, IdentityType, AccessPolicyEntry } from '../../types';
 
@@ -177,7 +178,7 @@ describe('parseVaultResourceId', () => {
     `${vaultResourceId}\n`,
   ])('rejects invalid or synthetic scope %j with actionable guidance', (scope) => {
     expect(() => parseVaultResourceId(scope)).toThrow('Copy the Resource ID from the target vault in Azure');
-    expect(() => exportToPowerShell([], {}, {}, 'myvault', subscriptionId, scope))
+    expect(() => exportToPowerShell([], {}, {}, scope))
       .toThrow('valid full Key Vault resource ID');
   });
 });
@@ -188,8 +189,6 @@ describe('exportToPowerShell', () => {
       [makeAnalysis({ objectId: 'u1', type: 'User' }, makeRec())],
       {},
       resolved({ u1: { name: 'Alice', type: 'User' } }),
-      'myvault',
-      subscriptionId,
       vaultResourceId
     );
     expect(ps).toContain('$vaultName = "myvault"');
@@ -205,8 +204,6 @@ describe('exportToPowerShell', () => {
       [makeAnalysis({ objectId: 'sp1', applicationId: 'app1', type: 'Application' }, makeRec())],
       {},
       resolved({ sp1: { name: 'MySP', type: 'ServicePrincipal' } }),
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('# Compound Identities (1)');
@@ -227,8 +224,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       {},
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('# SKIPPED: Already fully covered by existing direct-principal RBAC assignments');
@@ -246,8 +241,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       {},
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps.match(/# SKIPPED:/g)).toHaveLength(2);
@@ -271,8 +264,6 @@ describe('exportToPowerShell', () => {
         }],
         {},
         {},
-        'myvault',
-        subscriptionId,
         vaultResourceId
       );
       expect(ps).toContain('# SKIPPED: Role "Key Vault Secrets User" is already present in direct-principal RBAC coverage');
@@ -280,12 +271,21 @@ describe('exportToPowerShell', () => {
       expect(ps).toContain('-RoleDefinitionName "Key Vault Crypto User"');
       expect(ps).toContain('-ObjectId "partial"');
       expect(ps.match(/New-AzRoleAssignment/g)).toHaveLength(1);
-      expect(ps).toContain('-Scope $scope `\n  -ErrorAction Stop');
+      expect(ps).toContain('-Scope $scope `\n    -ErrorAction Stop');
     }
   );
 
+  it('guards each assignment so a partially failed run can be re-run', () => {
+    const ps = exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, vaultResourceId);
+    const guard = 'if (Test-AssignedAtVault -ObjectId "u1" -RoleName "Key Vault Secrets User") {';
+    expect(ps).toContain(guard);
+    expect(ps.indexOf('function Test-AssignedAtVault')).toBeLessThan(ps.indexOf(guard));
+    expect(ps.indexOf(guard)).toBeLessThan(ps.indexOf('New-AzRoleAssignment'));
+    expect(ps).toContain('Write-Host "Already assigned: Key Vault Secrets User -> u1"');
+  });
+
   it('requires an explicit full scope instead of looking up or inventing an offline target', () => {
-    expect(() => exportToPowerShell([], {}, {}, 'myvault', subscriptionId))
+    expect(() => exportToPowerShell([], {}, {}, ''))
       .toThrow('valid full Key Vault resource ID');
   });
 
@@ -294,19 +294,16 @@ describe('exportToPowerShell', () => {
       [makeAnalysis({}, makeRec())],
       {},
       {},
-      'synthetic-vault',
-      'offline-sub',
       vaultResourceId
     );
     expect(ps).toContain('# Vault: myvault');
     expect(ps).toContain(`$subscriptionId = "${subscriptionId}"`);
     expect(ps).toContain(`$scope = "${vaultResourceId}"`);
-    expect(ps).not.toContain('synthetic-vault');
-    expect(ps).not.toContain('offline-sub');
     expect(ps).not.toContain('Get-AzKeyVault');
     expect(ps).toContain('$ErrorActionPreference = "Stop"');
     expect(ps).toContain('Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop | Out-Null');
-    expect(ps).toContain('-Scope $scope `\n  -ErrorAction Stop');
+    expect(ps).toContain('-Scope $scope `\n    -ErrorAction Stop');
+    expect(ps.indexOf('Set-AzContext')).toBeLessThan(ps.indexOf('Get-AzRoleAssignment'));
     expect(ps.indexOf('Set-AzContext')).toBeLessThan(ps.indexOf('New-AzRoleAssignment'));
     expect(ps.indexOf('-Scope $scope')).toBeLessThan(ps.indexOf('Migration script completed'));
   });
@@ -321,8 +318,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       resolved({ u1: { name: 'Alice', type: 'User' } }),
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('# No matching role found for this identity');
@@ -332,7 +327,7 @@ describe('exportToPowerShell', () => {
   it.each(['\u201c', '\u201d', '\u201e'])('escapes PowerShell smart double quotes: %s', (quote) => {
     const ps = exportToPowerShell(
       [makeAnalysis({ objectId: `Object${quote}Id` }, makeRec({ roleNames: [`Role${quote}Name`] }))],
-      {}, {}, 'v', 's', vaultResourceId
+      {}, {}, vaultResourceId
     );
     expect(ps).toContain('-RoleDefinitionName "Role`' + quote + 'Name"');
     expect(ps).toContain('-ObjectId "Object`' + quote + 'Id"');
@@ -348,11 +343,50 @@ describe('exportToPowerShell', () => {
       ],
       {},
       resolved({ u1: { name: 'Alice', type: 'User' } }),
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('-ObjectId "o`$1"'); // $ -> `$
     expect(ps).toContain('-RoleDefinitionName "Role`"X"'); // " -> `"
   });
+});
+
+const hasPwsh = spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).status === 0;
+
+// GitHub's Ubuntu runners ship pwsh; locally this runs only when PowerShell is installed.
+describe.skipIf(!hasPwsh)('exportToPowerShell script run in PowerShell', () => {
+  // Like the real cmdlet, the Get-AzRoleAssignment stub returns assignments at, above and below the scope.
+  const HARNESS = `
+function Set-AzContext {}
+function Write-Host {}
+function Get-AzRoleAssignment { $global:existing | ForEach-Object { [pscustomobject]@{ Scope = $_ } } }
+function New-AzRoleAssignment { $global:created++ }
+ConvertFrom-Json $env:CASES | ForEach-Object {
+  $global:existing = @($_.existing)
+  $global:created = 0
+  & ([scriptblock]::Create($env:SCRIPT)) | Out-Null
+  $global:created
+} | ConvertTo-Json -Compress`;
+
+  it('creates the vault assignment unless one exists at the vault or above it', () => {
+    const cases: Array<[string[], number]> = [
+      [[], 1],
+      [[vaultResourceId], 0],
+      [[vaultResourceId.toUpperCase()], 0],
+      [[`/subscriptions/${subscriptionId}/resourceGroups/my-rg`], 0],
+      [[`/subscriptions/${subscriptionId}`], 0],
+      [['/'], 0],
+      [[`${vaultResourceId}/secrets/one`], 1],
+      [[`${vaultResourceId}2`], 1],
+    ];
+    const run = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', HARNESS], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SCRIPT: exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, vaultResourceId),
+        CASES: JSON.stringify(cases.map(([existing]) => ({ existing }))),
+      },
+    });
+    expect(run.stderr).toBe('');
+    expect(JSON.parse(run.stdout)).toEqual(cases.map(([, created]) => created));
+  }, 30_000);
 });

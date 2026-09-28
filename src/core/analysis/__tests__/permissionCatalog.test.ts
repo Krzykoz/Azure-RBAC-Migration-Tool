@@ -28,7 +28,7 @@ describe('createPermissionCatalog — injected mapping', () => {
     ]);
   });
 
-  it('treats "All" as every mapped action in the category', () => {
+  it('treats "All" as every non-privileged mapped action in the category', () => {
     const required = catalog.getRequiredActions(makePolicy({ secrets: ['All'] }));
     expect([...required].sort()).toEqual([
       'microsoft.keyvault/secrets/get',

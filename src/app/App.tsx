@@ -9,47 +9,31 @@ import { getTenants } from '../azure/client';
 import { KeyVault, RoleDefinition } from '../core/types';
 import { Theme, resolveInitialTheme, applyTheme } from './theme';
 
-/**
- * Root component. The app has four top-level views, switched by state (no
- * router): the live Dashboard (online or offline data), the Offline input
- * page, the Manual / Interactive mode, and the Login screen.
- */
+type OfflineData = { vaults: KeyVault[]; roles: RoleDefinition[] };
+
+/** The four top-level screens; no router, the app switches between them by state. */
+type View =
+  | { name: 'login' }
+  | { name: 'offline-input' }
+  | { name: 'manual' }
+  | { name: 'online'; armToken: string; graphToken: string }
+  | { name: 'offline'; data: OfflineData };
+
 function App() {
-  const [armToken, setArmToken] = useState<string | null>(null);
-  const [graphToken, setGraphToken] = useState<string | null>(null);
-  const [theme, setTheme] = useState<Theme>('light');
+  const [view, setView] = useState<View>({ name: 'login' });
+  // main.tsx applied this theme before the first render.
+  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
   const [organizationName, setOrganizationName] = useState<string | null>(null);
-
-  // Offline Mode State
-  const [isOfflineInput, setIsOfflineInput] = useState(false);
-  const [offlineData, setOfflineData] = useState<{ vaults: KeyVault[]; roles: RoleDefinition[] } | null>(null);
-
-  // Manual / Interactive Mode State
-  const [isManualInput, setIsManualInput] = useState(false);
+  const armToken = view.name === 'online' ? view.armToken : null;
 
   useEffect(() => {
-    // Check for saved theme or system preference
-    const initial = resolveInitialTheme();
-    setTheme(initial);
-    applyTheme(initial, false);
-  }, []);
-
-  useEffect(() => {
+    setOrganizationName(null);
+    const tenantId = armToken && getTenantIdFromToken(armToken);
+    if (!armToken || !tenantId) return;
     let active = true;
-    const fetchOrgName = async () => {
-      if (armToken) {
-        const tid = getTenantIdFromToken(armToken);
-        if (tid) {
-          const tenants = await getTenants(armToken);
-          if (active && tenants[tid]) {
-            setOrganizationName(tenants[tid]);
-          }
-        }
-      } else {
-        setOrganizationName(null);
-      }
-    };
-    fetchOrgName();
+    void getTenants(armToken).then((tenants) => {
+      if (active && tenants[tenantId]) setOrganizationName(tenants[tenantId]);
+    });
     return () => {
       active = false;
     };
@@ -61,73 +45,40 @@ function App() {
     applyTheme(newTheme, true);
   };
 
-  const handleLogin = (newArmToken: string, newGraphToken: string) => {
-    setArmToken(newArmToken);
-    setGraphToken(newGraphToken);
-    setIsOfflineInput(false);
-    setIsManualInput(false);
-    setOfflineData(null);
-  };
-
-  const handleLogout = () => {
-    setArmToken(null);
-    setGraphToken(null);
-    setOrganizationName(null);
-    setIsOfflineInput(false);
-    setIsManualInput(false);
-    setOfflineData(null);
-  };
-
-  const handleOfflineStart = (vaults: KeyVault[], roles: RoleDefinition[]) => {
-    setOfflineData({ vaults, roles });
-    setIsOfflineInput(false);
-  };
+  const goToLogin = () => setView({ name: 'login' });
 
   const renderContent = () => {
-    // 1. Dashboard (Online or Offline)
-    if (armToken || offlineData) {
-      return (
-        <Dashboard
-          armToken={armToken || ''} // Empty when running on offline data
-          graphToken={graphToken || undefined}
-          theme={theme}
-          offlineData={offlineData}
-        />
-      );
+    switch (view.name) {
+      case 'online':
+        return <Dashboard armToken={view.armToken} graphToken={view.graphToken || undefined} theme={theme} />;
+      case 'offline':
+        return <Dashboard armToken="" theme={theme} offlineData={view.data} />;
+      case 'offline-input':
+        return (
+          <OfflineInputPage
+            onStart={(vaults, roles) => setView({ name: 'offline', data: { vaults, roles } })}
+            onBack={goToLogin}
+          />
+        );
+      case 'manual':
+        return <ManualModePage onBack={goToLogin} />;
+      case 'login':
+        return (
+          <LoginScreen
+            onLogin={(newArmToken, newGraphToken) => setView({ name: 'online', armToken: newArmToken, graphToken: newGraphToken })}
+            onOffline={() => setView({ name: 'offline-input' })}
+            onManual={() => setView({ name: 'manual' })}
+          />
+        );
     }
-
-    // 2. Offline Input Page
-    if (isOfflineInput) {
-      return (
-        <OfflineInputPage
-          onStart={handleOfflineStart}
-          onBack={() => setIsOfflineInput(false)}
-        />
-      );
-    }
-
-    // 3. Manual / Interactive Mode
-    if (isManualInput) {
-      return <ManualModePage onBack={() => setIsManualInput(false)} />;
-    }
-
-    // 4. Login Screen
-    return (
-      <LoginScreen
-        onLogin={handleLogin}
-        onOffline={() => setIsOfflineInput(true)}
-        onManual={() => setIsManualInput(true)}
-      />
-    );
   };
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-900 font-sans text-neutral-900 dark:text-neutral-100 transition-colors duration-200">
       <Header
-        user={armToken ? getUserNameFromToken(armToken) : (offlineData ? 'Offline User' : null)}
+        user={armToken ? getUserNameFromToken(armToken) : view.name === 'offline' ? 'Offline User' : null}
         organization={organizationName}
-        onLogout={handleLogout}
-        theme={theme}
+        onLogout={goToLogin}
         onToggleTheme={toggleTheme}
       />
       <main>

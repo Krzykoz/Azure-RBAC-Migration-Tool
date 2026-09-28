@@ -9,7 +9,7 @@ import {
 import { ANALYSIS_STRATEGIES } from '../constants';
 import { defaultPermissionCatalog, PermissionCatalog } from './permissionCatalog';
 import { calculateCoverage } from './coverage';
-import { runWeightedAnalysis } from './strategies';
+import { recommendRoles } from './strategies';
 
 /**
  * Collapse strategies that resolved to the same role set into a single
@@ -53,9 +53,7 @@ export const analyzePolicies = (
 ): MigrationAnalysis[] => {
   return policies.map((policy) => {
     const requiredActions = catalog.getRequiredActions(policy);
-    const allRecommendations = ANALYSIS_STRATEGIES.map((strategy) =>
-      runWeightedAnalysis(requiredActions, availableRoles, strategy, catalog)
-    );
+    const allRecommendations = recommendRoles(requiredActions, availableRoles, ANALYSIS_STRATEGIES, catalog);
 
     return {
       originalPolicy: policy,

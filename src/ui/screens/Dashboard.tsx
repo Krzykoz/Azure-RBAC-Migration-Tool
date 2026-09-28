@@ -1,18 +1,13 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MigrationStatus, KeyVault, RoleDefinition, Subscription } from '../../core/types';
 import { useAzureData } from '../hooks/useAzureData';
 import { useAnalysis } from '../hooks/useAnalysis';
-import { useExport, ExportFormat } from '../hooks/useExport';
-import { ArrowRightIcon, LoaderIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from '../icons';
+import { useExport, EXPORT_FORMATS } from '../hooks/useExport';
+import { ArrowRightIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from '../icons';
 import { SidePanel } from '../components/SidePanel';
+import { AnalysisResults } from '../components/AnalysisResults';
 import { getPolicyKey } from '../../core/identity/policyKey';
 import { isCompoundIdentity, resolveIdentityType } from '../../core/identity/identity';
-
-// Lazily loaded so the heavy charting library (recharts) is only fetched once an
-// analysis completes, keeping the initial bundle small.
-const AnalysisResults = lazy(() =>
-  import('../components/AnalysisResults').then((m) => ({ default: m.AnalysisResults }))
-);
 
 interface DashboardProps {
   armToken: string;
@@ -28,6 +23,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   offlineData,
 }) => {
   const [includeCustomRoles, setIncludeCustomRoles] = useState(true);
+  const [analyzed, setAnalyzed] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const {
@@ -40,9 +36,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     availableRoles,
     roleAssignments,
     resolvedNames,
-    status,
+    status: dataStatus,
     error: azureError,
-    setStatus,
     resolveIdentities,
   } = useAzureData({ armToken, graphToken, offlineData });
 
@@ -62,7 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     includeCustomRoles,
   });
 
-  const { showExportMenu, setShowExportMenu, handleExport } = useExport({
+  const { exportBlocker, handleExport } = useExport({
     results,
     selectedRoles,
     resolvedNames,
@@ -72,23 +67,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     vaultResourceId: selectedVault?.id || '',
     theme,
   });
-
-  // Close the export dropdown when clicking outside of it.
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        exportMenuRef.current &&
-        event.target instanceof Node &&
-        !exportMenuRef.current.contains(event.target)
-      ) {
-        setShowExportMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showExportMenu, setShowExportMenu]);
 
   // Resolve identities when results change
   useEffect(() => {
@@ -137,47 +115,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [resolvedNames, results, setSelectedForExport]);
 
+  // Data loading states win; otherwise the outcome of the last analysis run.
+  const status =
+    dataStatus !== MigrationStatus.IDLE ? dataStatus
+      : analysisError ? MigrationStatus.ERROR
+        : analyzed ? MigrationStatus.COMPLETE
+          : MigrationStatus.IDLE;
+
+  const resetAnalysis = () => {
+    setAnalyzed(false);
+    setAnalysisError(null);
+    clearResults();
+  };
+
   const handleAnalyze = () => {
     if (!selectedVault) return;
     setAnalysisError(null);
-    setStatus(MigrationStatus.ANALYZING);
-
     try {
       runAnalysis();
-      setStatus(MigrationStatus.COMPLETE);
+      setAnalyzed(true);
     } catch (err) {
       console.error(err);
       setAnalysisError(err instanceof Error ? err.message : 'Analysis failed.');
-      setStatus(MigrationStatus.ERROR);
     }
   };
 
   const handleSelectVault = (vault: KeyVault) => {
     setSelectedVault(vault);
-    setAnalysisError(null);
-    setShowExportMenu(false);
-    setStatus(MigrationStatus.IDLE);
-    clearResults();
+    resetAnalysis();
   };
 
   const handleSelectSubscription = (sub: Subscription | null) => {
     if (sub === selectedSub) return;
     setSelectedSub(sub);
-    setSelectedVault(null);
-    setAnalysisError(null);
-    setShowExportMenu(false);
-    setStatus(sub ? MigrationStatus.LOADING : MigrationStatus.IDLE);
-    clearResults();
+    resetAnalysis();
   };
 
   const resetToSubscriptions = () => handleSelectSubscription(null);
 
   const resetToVaults = () => {
     setSelectedVault(null);
-    setAnalysisError(null);
-    setShowExportMenu(false);
-    if (status !== MigrationStatus.LOADING) setStatus(MigrationStatus.IDLE);
-    clearResults();
+    resetAnalysis();
   };
 
   const builtInRoleCount = availableRoles.filter(
@@ -250,30 +228,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {selectedVault ? `Analysis: ${selectedVault.name}` : 'Migration Workspace'}
             </h2>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-              {/* Export Menu */}
+              {/* Export Menu: a native popover anchored under its button (light dismiss and Esc for free) */}
               {status === MigrationStatus.COMPLETE && (
-                <div className="relative w-full sm:w-auto" ref={exportMenuRef}>
+                <>
                   <button
-                    onClick={() => setShowExportMenu(!showExportMenu)}
-                    aria-expanded={showExportMenu}
-                    className="w-full px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 transition-colors sm:w-auto"
+                    type="button"
+                    popoverTarget="export-menu"
+                    className="[anchor-name:--export-menu] w-full px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 transition-colors sm:w-auto"
                   >
                     <DownloadIcon className="w-4 h-4" /> Export
                   </button>
-                  {showExportMenu && (
-                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded shadow-lg z-10 min-w-[160px]">
-                      {(['csv', 'json', 'powershell', 'html'] as ExportFormat[]).map((format) => (
+                  <div
+                    id="export-menu"
+                    popover="auto"
+                    className="[position-anchor:--export-menu] [top:anchor(bottom)] [right:anchor(right)] bottom-auto left-auto m-0 mt-1 p-0 max-w-xs min-w-[160px] bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700 rounded shadow-lg"
+                  >
+                    {EXPORT_FORMATS.map((format) => {
+                      const blocker = exportBlocker(format);
+                      return (
                         <button
                           key={format}
-                          onClick={() => handleExport(format)}
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                          type="button"
+                          popoverTarget="export-menu"
+                          popoverTargetAction="hide"
+                          disabled={blocker !== null}
+                          onClick={() => void handleExport(format)}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:cursor-not-allowed disabled:text-neutral-600 disabled:hover:bg-transparent transition-colors"
                         >
                           Export as {format.toUpperCase()}
+                          {blocker && <span className="block text-[10px] leading-snug text-neutral-700 dark:text-neutral-400">{blocker}</span>}
                         </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
 
               {/* Analysis Controls */}
@@ -288,7 +276,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         checked={includeCustomRoles}
                         onChange={(e) => setIncludeCustomRoles(e.target.checked)}
                         disabled={
-                          status === MigrationStatus.ANALYZING ||
                           status === MigrationStatus.COMPLETE ||
                           status === MigrationStatus.LOADING ||
                           !!azureError
@@ -297,8 +284,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="w-9 h-5 bg-neutral-300 dark:bg-neutral-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
                     </div>
                     <span
-                      className={`text-sm font-medium ${status === MigrationStatus.ANALYZING ||
-                          status === MigrationStatus.COMPLETE
+                      className={`text-sm font-medium ${status === MigrationStatus.COMPLETE
                           ? 'text-neutral-400'
                           : 'text-neutral-700 dark:text-neutral-300'
                         }`}
@@ -311,7 +297,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <button
                     onClick={handleAnalyze}
                     disabled={
-                      status === MigrationStatus.ANALYZING ||
                       status === MigrationStatus.COMPLETE ||
                       status === MigrationStatus.LOADING ||
                       !!azureError
@@ -321,22 +306,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm'
                       }`}
                   >
-                    {status === MigrationStatus.ANALYZING && (
-                      <>
-                        <LoaderIcon className="animate-spin w-4 h-4" /> Processing...
-                      </>
-                    )}
-                    {status === MigrationStatus.COMPLETE && (
+                    {status === MigrationStatus.COMPLETE ? (
                       <>
                         <CheckCircleIcon className="w-4 h-4" /> Analysis Complete
                       </>
+                    ) : (
+                      <>
+                        Run Analysis <ArrowRightIcon className="w-4 h-4" />
+                      </>
                     )}
-                    {status !== MigrationStatus.ANALYZING &&
-                      status !== MigrationStatus.COMPLETE && (
-                        <>
-                          Run Analysis <ArrowRightIcon className="w-4 h-4" />
-                        </>
-                      )}
                   </button>
                 </div>
               )}
@@ -418,42 +396,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             )}
 
-            {/* Analyzing State */}
-            {status === MigrationStatus.ANALYZING && (
-              <div className="h-full flex flex-col items-center justify-center">
-                <div className="relative w-20 h-20 mb-8">
-                  <div className="absolute inset-0 border-4 border-neutral-200 dark:border-neutral-700 rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-brand-600 rounded-full border-t-transparent animate-spin"></div>
-                </div>
-                <p className="text-lg font-medium text-neutral-900 dark:text-neutral-200">
-                  Mapping Roles...
-                </p>
-                <p className="text-sm text-neutral-700 dark:text-neutral-400 mt-2 max-w-md text-center">
-                  Applying 3 weighted strategies to suggest RBAC mappings.
-                </p>
-              </div>
-            )}
-
             {/* Complete State - Show Results */}
             {status === MigrationStatus.COMPLETE && (
-              <Suspense
-                fallback={
-                  <div className="h-full flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-400">
-                    <LoaderIcon className="animate-spin w-6 h-6 text-brand-600 mb-3" />
-                    <p className="text-sm">Loading results…</p>
-                  </div>
-                }
-              >
-                <AnalysisResults
-                  results={results}
-                  selectedRoles={selectedRoles}
-                  setSelectedRoles={setSelectedRoles}
-                  resolvedNames={resolvedNames}
-                  theme={theme}
-                  selectedForExport={selectedForExport}
-                  setSelectedForExport={setSelectedForExport}
-                />
-              </Suspense>
+              <AnalysisResults
+                results={results}
+                selectedRoles={selectedRoles}
+                resolvedNames={resolvedNames}
+                onSelectRole={(policyKey, recIdx) => setSelectedRoles((prev) => ({ ...prev, [policyKey]: recIdx }))}
+                selection={{ selected: selectedForExport, onChange: setSelectedForExport }}
+              />
             )}
           </div>
         </div>

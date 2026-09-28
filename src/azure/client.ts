@@ -25,9 +25,10 @@ class AzureError extends Error {
   }
 }
 
-const azureFetch = async <T>(url: string, token: string): Promise<T> => {
+const azureFetch = async <T>(url: string, token: string, signal?: AbortSignal): Promise<T> => {
   try {
     const response = await fetch(url, {
+      signal,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -67,7 +68,7 @@ const encodeResourceId = (id: string): string => {
 
 // ARM list endpoints return at most one page of results plus an absolute `nextLink` URL.
 // This helper follows nextLink until exhausted so large subscriptions are not silently truncated.
-const azureFetchAllPages = async <TItem>(url: string, token: string): Promise<TItem[]> => {
+const azureFetchAllPages = async <TItem>(url: string, token: string, signal?: AbortSignal): Promise<TItem[]> => {
   const items: TItem[] = [];
   let nextUrl: string | undefined = url;
   const visited = new Set<string>();
@@ -78,7 +79,7 @@ const azureFetchAllPages = async <TItem>(url: string, token: string): Promise<TI
       throw new AzureError('Azure API returned an invalid or repeated pagination URL.');
     }
     visited.add(parsedUrl.href);
-    const page: PagedListResponse<TItem> = await azureFetch<PagedListResponse<TItem>>(nextUrl, token);
+    const page: PagedListResponse<TItem> = await azureFetch<PagedListResponse<TItem>>(nextUrl, token, signal);
     if (!page || !Array.isArray(page.value)) {
       throw new AzureError('Azure API returned an invalid list: expected a value array.');
     }
@@ -92,9 +93,9 @@ const azureFetchAllPages = async <TItem>(url: string, token: string): Promise<TI
   return items;
 };
 
-export const validateToken = async (token: string): Promise<void> => {
+export const validateToken = async (token: string, signal?: AbortSignal): Promise<void> => {
   try {
-    await azureFetch(`${ARM}/subscriptions?api-version=${API.SUBSCRIPTIONS}`, token);
+    await azureFetch(`${ARM}/subscriptions?api-version=${API.SUBSCRIPTIONS}`, token, signal);
   } catch (e: unknown) {
     console.error('Token validation failed', e);
 
@@ -116,9 +117,9 @@ export const validateToken = async (token: string): Promise<void> => {
   }
 };
 
-export const getSubscriptions = async (token: string): Promise<Subscription[]> => {
+export const getSubscriptions = async (token: string, signal?: AbortSignal): Promise<Subscription[]> => {
   const url = `${ARM}/subscriptions?api-version=${API.SUBSCRIPTIONS}`;
-  const value = await azureFetchAllPages<SubscriptionResponse['value'][number]>(url, token);
+  const value = await azureFetchAllPages<SubscriptionResponse['value'][number]>(url, token, signal);
   return parseSubscriptions({ value });
 };
 
@@ -135,12 +136,13 @@ export const getTenants = async (token: string): Promise<Record<string, string>>
 
 export const getRoleDefinitions = async (
   token: string,
-  subscriptionId: string
+  subscriptionId: string,
+  signal?: AbortSignal
 ): Promise<RoleDefinition[]> => {
   const url = `${ARM}/subscriptions/${encodeIdentifier(subscriptionId, 'Subscription ID')}/providers/Microsoft.Authorization/roleDefinitions?api-version=${API.AUTHORIZATION}`;
 
   try {
-    const roles = normalizeRoleDefinitions(await azureFetchAllPages<unknown>(url, token));
+    const roles = normalizeRoleDefinitions(await azureFetchAllPages<unknown>(url, token, signal));
     const knownActions = [...defaultPermissionCatalog.knownActions];
 
     return roles.filter((role) => role.properties.permissions.some((permission) =>
@@ -157,12 +159,13 @@ export const getRoleDefinitions = async (
 
 export const getRoleAssignments = async (
   token: string,
-  subscriptionId: string
+  subscriptionId: string,
+  signal?: AbortSignal
 ): Promise<RoleAssignment[]> => {
   const url = `${ARM}/subscriptions/${encodeIdentifier(subscriptionId, 'Subscription ID')}/providers/Microsoft.Authorization/roleAssignments?api-version=${API.AUTHORIZATION}`;
 
   try {
-    return await azureFetchAllPages<RoleAssignment>(url, token);
+    return await azureFetchAllPages<RoleAssignment>(url, token, signal);
   } catch (e) {
     console.error('Failed to fetch role assignments', e);
     throw e;
@@ -177,7 +180,8 @@ export const getRoleAssignments = async (
 export const resolveBatchIdentities = async (
   objectIds: string[],
   token: string,
-  applicationIds: string[] = []
+  applicationIds: string[] = [],
+  signal?: AbortSignal
 ): Promise<Record<string, { name: string; type: IdentityType }>> => {
   if (objectIds.length === 0 && applicationIds.length === 0) return {};
 
@@ -186,11 +190,13 @@ export const resolveBatchIdentities = async (
   const chunkSize = ANALYSIS_CONSTANTS.GRAPH_BATCH_SIZE;
 
   for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    if (signal?.aborted) return results;
     const chunk = uniqueIds.slice(i, i + chunkSize);
 
     try {
       const response = await fetch(`${GRAPH}/directoryObjects/getByIds`, {
         method: 'POST',
+        signal,
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -217,13 +223,14 @@ export const resolveBatchIdentities = async (
   const uniqueAppIds = [...new Set(applicationIds)];
   const concurrencyLimit = ANALYSIS_CONSTANTS.VAULT_CONCURRENCY_LIMIT;
   for (let i = 0; i < uniqueAppIds.length; i += concurrencyLimit) {
+    if (signal?.aborted) return results;
     await Promise.all(uniqueAppIds.slice(i, i + concurrencyLimit).map(async (appId) => {
       try {
         if (typeof appId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(appId)) {
           throw new AzureError('Application ID must be a GUID for Graph lookup.');
         }
         const url = `${GRAPH}/servicePrincipals(appId='${encodeURIComponent(appId)}')?$select=id,displayName,appDisplayName`;
-        const principal = await azureFetch<GraphResponse['value'][number]>(url, token);
+        const principal = await azureFetch<GraphResponse['value'][number]>(url, token, signal);
         const resolved = parseGraphResponse({
           value: [{ ...principal, '@odata.type': '#microsoft.graph.servicePrincipal' }],
         });
@@ -241,13 +248,14 @@ export const resolveBatchIdentities = async (
 export const getKeyVaults = async (
   token: string,
   subscriptionId: string,
-  roleAssignments?: RoleAssignment[]
+  roleAssignments?: RoleAssignment[],
+  signal?: AbortSignal
 ): Promise<KeyVault[]> => {
   const listUrl = `${ARM}/subscriptions/${encodeIdentifier(subscriptionId, 'Subscription ID')}/resources?$filter=resourceType eq 'Microsoft.KeyVault/vaults'&api-version=${API.RESOURCES}`;
 
   const [listValue, assignments] = await Promise.all([
-    azureFetchAllPages<{ id: string }>(listUrl, token),
-    roleAssignments ?? getRoleAssignments(token, subscriptionId),
+    azureFetchAllPages<{ id: string }>(listUrl, token, signal),
+    roleAssignments ?? getRoleAssignments(token, subscriptionId, signal),
   ]);
   const principalTypeCache = parsePrincipalTypes({ value: assignments });
 
@@ -259,12 +267,13 @@ export const getKeyVaults = async (
   const results: KeyVault[] = [];
 
   for (let i = 0; i < listValue.length; i += concurrencyLimit) {
+    signal?.throwIfAborted();
     const chunk = listValue.slice(i, i + concurrencyLimit);
 
     const chunkPromises = chunk.map(async (resource) => {
       try {
         const vaultUrl = `${ARM}${encodeResourceId(resource.id)}?api-version=${API.KEYVAULT}`;
-        const vaultData = await azureFetch<KeyVaultResponse>(vaultUrl, token);
+        const vaultData = await azureFetch<KeyVaultResponse>(vaultUrl, token, signal);
         return parseKeyVaultResponse(vaultData, principalTypeCache);
       } catch (e) {
         console.error(`Failed to fetch details for vault ${resource.id}`, e);

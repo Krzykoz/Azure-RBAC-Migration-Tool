@@ -6,7 +6,7 @@ A browser‑only tool that helps you migrate Azure Key Vault access policies to 
 
 - **Token‑based authentication** – Paste Azure CLI tokens (Management and optional Graph) directly.
 - **Manual / Interactive mode** – Hand‑pick Key Vault permissions and get live role suggestions, fully offline. See [Manual / Interactive Mode](#manual--interactive-mode).
-- **Multi‑strategy analysis** – Three weighted greedy algorithms:
+- **Multi‑strategy analysis** – Three weighted strategies, each solved exactly:
   - **Minimize Excess** – Strict, avoids unnecessary permissions.
   - **Balanced** – Good trade‑off between coverage and security.
   - **Max Coverage** – Prioritises full permission coverage.
@@ -36,6 +36,8 @@ npm run dev
 ```
 
 The app will be available at `http://localhost:3000` (configured in `vite.config.ts`).
+The dev server listens on localhost only; run `npm run dev -- --host` to reach it
+from another device.
 
 ## Build for Production
 
@@ -70,7 +72,8 @@ The production bundle is emitted to the `dist` folder, which is already ignored 
   them, while reports retain their details and a warning.
 - PowerShell export also skips identities already covered by the direct-principal
   assignments that were loaded. It selects the target subscription and stops on
-  errors; it does not switch the vault's authorization model.
+  errors; it does not switch the vault's authorization model. It is safe to re-run
+  after a partial failure: assignments already effective at the vault are skipped.
 - Existing coverage is not a complete effective-access assessment. Group membership,
   management-group inheritance, deny assignments, and conditional access are not
   evaluated. Verify effective access before changing a production vault.
@@ -133,27 +136,36 @@ recording how and when it was produced.
 ## Architecture
 
 The codebase is split into three layers: a framework‑agnostic **core** (domain
-types, analysis engine, presentation rules, exporters), a thin **azure** API
-layer (fetch + response parsing), and the React **ui/app** layer on top.
+types, analysis engine, exporters), a thin **azure** API layer (fetch + response
+parsing), and the React **ui/app** layer on top.
 
-The HTML export and the live React view share every *decision* (permission
-ordering, confidence tiers, banner states, icons, chart geometry) through the
-`core/presentation` helpers, so the two renderings cannot drift apart.
+The HTML report is rendered from the same React components as the live analysis
+view (`renderToStaticMarkup`, loaded only when exporting), with the app's CSS
+inlined and a small script for strategy tabs, totals and the theme toggle.
 
 ## How It Works
 
 1. **Data fetching** – Retrieves subscriptions, vaults, role definitions, and access policies via Azure ARM APIs.
-2. **Mapping** – Loads `accessPolicyRbacMapping.csv` to map legacy permissions to RBAC data actions.
-3. **Analysis** – Runs three weighted greedy searches, deduplicating equivalent
-   candidates. Each added role must cover another required action, so combinations
-   are not capped at four roles and exhaustive subset enumeration is avoided.
-   These are heuristics, not guarantees of globally optimal role sets.
+2. **Mapping** – Loads `accessPolicyRbacMapping.csv` (identical to Microsoft's
+   [access policy to RBAC comparison tool](https://github.com/Azure/KeyVault-AccessPolicyToRBAC-CompareTool)
+   mapping) to map legacy permissions to RBAC data actions. `all` expands to every
+   permission in its category except the privileged Purge and Release.
+3. **Analysis** – Each strategy scores a role set as covered × coverage weight −
+   excess × excess weight − extra roles × role weight and returns the best-scoring
+   set, found with an exact branch-and-bound search over the roles that cover
+   something (duplicates and roles dominated by another are dropped first). Max
+   Coverage maximizes coverage before score. Search time grows exponentially with
+   the number of non-dominated roles in the worst case; in testing, 1,000 policies
+   took about 0.2 s against the built-in roles and about 1 s with 20 extra custom roles.
 4. **Scoring** – Confidence reflects how much of the policy a role set covers; excess permissions are reported separately so you can review over-grants.
 5. **Presentation** – Visual breakdowns with charts, tooltips, and export options.
 
 ## Security
 
 - Tokens are kept **in memory only**, not persisted to browser storage.
+- Production builds ship a Content-Security-Policy that allows scripts and styles
+  only from the app's own origin and network requests only to Azure Resource
+  Manager and Microsoft Graph.
 - Online mode sends the Management token to Azure Resource Manager and the optional
   Graph token to Microsoft Graph. Identity lookups send the requested identifiers
   to Graph. There is no application backend or telemetry endpoint.
@@ -173,7 +185,6 @@ ordering, confidence tiers, banner states, icons, chart geometry) through the
 - **TypeScript**
 - **Vite**
 - **Tailwind CSS**
-- **Recharts**
 
 ## License
 

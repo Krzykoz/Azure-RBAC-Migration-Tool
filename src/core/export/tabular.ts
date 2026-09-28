@@ -118,11 +118,8 @@ export const exportToPowerShell = (
   results: MigrationAnalysis[],
   selectedRoles: Record<string, number>,
   resolvedNames: Record<string, { name: string; type: IdentityType }>,
-  _vaultName: string,
-  _subscriptionId: string,
-  vaultResourceId?: string
+  scope: string
 ): string => {
-  const scope = vaultResourceId || '';
   const { vaultName, subscriptionId } = parseVaultResourceId(scope);
   const script = [`# Azure Key Vault RBAC Migration Script
 # Generated: ${new Date().toISOString()}
@@ -131,6 +128,7 @@ export const exportToPowerShell = (
 
 # WARNING: Review this script carefully before running!
 # This script will create role assignments for the Key Vault.
+# Safe to re-run: assignments already effective at the vault are skipped.
 # Authenticate with Connect-AzAccount in the target tenant before running.
 
 $ErrorActionPreference = "Stop"
@@ -139,6 +137,13 @@ $subscriptionId = "${psEscape(subscriptionId)}"
 $scope = "${psEscape(scope)}"
 
 Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop | Out-Null
+
+# Get-AzRoleAssignment -Scope also returns assignments below the vault (single secrets, keys or
+# certificates), which don't grant vault-wide access. Only the vault and the scopes above it count.
+function Test-AssignedAtVault([string]$ObjectId, [string]$RoleName) {
+  [bool](Get-AzRoleAssignment -ObjectId $ObjectId -RoleDefinitionName $RoleName -Scope $scope -ErrorAction Stop |
+    Where-Object { "$scope/".StartsWith("$($_.Scope.TrimEnd('/'))/", [StringComparison]::OrdinalIgnoreCase) })
+}
 
 Write-Host "Starting RBAC migration for Key Vault: $vaultName" -ForegroundColor Green
 Write-Host ""
@@ -199,11 +204,18 @@ Write-Host ""
           script.push(`# SKIPPED: Role "${psComment(roleName)}" is already present in direct-principal RBAC coverage; no duplicate assignment emitted.`);
           return;
         }
-        script.push(`New-AzRoleAssignment \``);
-        script.push(`  -ObjectId "${psEscape(r.originalPolicy.objectId)}" \``);
-        script.push(`  -RoleDefinitionName "${psEscape(roleName)}" \``);
-        script.push(`  -Scope $scope \``);
-        script.push(`  -ErrorAction Stop`);
+        const objectId = psEscape(r.originalPolicy.objectId);
+        const role = psEscape(roleName);
+        // Re-runnable: skip assignments already effective at the vault (at or above its scope).
+        script.push(`if (Test-AssignedAtVault -ObjectId "${objectId}" -RoleName "${role}") {`);
+        script.push(`  Write-Host "Already assigned: ${role} -> ${objectId}"`);
+        script.push(`} else {`);
+        script.push(`  New-AzRoleAssignment \``);
+        script.push(`    -ObjectId "${objectId}" \``);
+        script.push(`    -RoleDefinitionName "${role}" \``);
+        script.push(`    -Scope $scope \``);
+        script.push(`    -ErrorAction Stop | Out-Null`);
+        script.push(`}`);
       });
     } else {
       script.push(`# No matching role found for this identity`);
