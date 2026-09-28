@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { exportToCSV, exportToJSON, exportToPowerShell, parseVaultResourceId } from '../tabular';
 import { MigrationAnalysis, SuggestedRole, IdentityType, AccessPolicyEntry } from '../../types';
 
@@ -276,8 +277,9 @@ describe('exportToPowerShell', () => {
 
   it('guards each assignment so a partially failed run can be re-run', () => {
     const ps = exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, vaultResourceId);
-    const guard = 'if (Get-AzRoleAssignment -ObjectId "u1" -RoleDefinitionName "Key Vault Secrets User" -Scope $scope -ErrorAction Stop) {';
+    const guard = 'if (Test-AssignedAtVault -ObjectId "u1" -RoleName "Key Vault Secrets User") {';
     expect(ps).toContain(guard);
+    expect(ps.indexOf('function Test-AssignedAtVault')).toBeLessThan(ps.indexOf(guard));
     expect(ps.indexOf(guard)).toBeLessThan(ps.indexOf('New-AzRoleAssignment'));
     expect(ps).toContain('Write-Host "Already assigned: Key Vault Secrets User -> u1"');
   });
@@ -346,4 +348,45 @@ describe('exportToPowerShell', () => {
     expect(ps).toContain('-ObjectId "o`$1"'); // $ -> `$
     expect(ps).toContain('-RoleDefinitionName "Role`"X"'); // " -> `"
   });
+});
+
+const hasPwsh = spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).status === 0;
+
+// GitHub's Ubuntu runners ship pwsh; locally this runs only when PowerShell is installed.
+describe.skipIf(!hasPwsh)('exportToPowerShell script run in PowerShell', () => {
+  // Like the real cmdlet, the Get-AzRoleAssignment stub returns assignments at, above and below the scope.
+  const HARNESS = `
+function Set-AzContext {}
+function Write-Host {}
+function Get-AzRoleAssignment { $global:existing | ForEach-Object { [pscustomobject]@{ Scope = $_ } } }
+function New-AzRoleAssignment { $global:created++ }
+ConvertFrom-Json $env:CASES | ForEach-Object {
+  $global:existing = @($_.existing)
+  $global:created = 0
+  & ([scriptblock]::Create($env:SCRIPT)) | Out-Null
+  $global:created
+} | ConvertTo-Json -Compress`;
+
+  it('creates the vault assignment unless one exists at the vault or above it', () => {
+    const cases: Array<[string[], number]> = [
+      [[], 1],
+      [[vaultResourceId], 0],
+      [[vaultResourceId.toUpperCase()], 0],
+      [[`/subscriptions/${subscriptionId}/resourceGroups/my-rg`], 0],
+      [[`/subscriptions/${subscriptionId}`], 0],
+      [['/'], 0],
+      [[`${vaultResourceId}/secrets/one`], 1],
+      [[`${vaultResourceId}2`], 1],
+    ];
+    const run = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', HARNESS], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SCRIPT: exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, vaultResourceId),
+        CASES: JSON.stringify(cases.map(([existing]) => ({ existing }))),
+      },
+    });
+    expect(run.stderr).toBe('');
+    expect(JSON.parse(run.stdout)).toEqual(cases.map(([, created]) => created));
+  }, 30_000);
 });

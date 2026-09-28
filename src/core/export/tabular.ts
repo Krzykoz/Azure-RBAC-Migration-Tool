@@ -138,6 +138,13 @@ $scope = "${psEscape(scope)}"
 
 Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop | Out-Null
 
+# Get-AzRoleAssignment -Scope also returns assignments below the vault (single secrets, keys or
+# certificates), which don't grant vault-wide access. Only the vault and the scopes above it count.
+function Test-AssignedAtVault([string]$ObjectId, [string]$RoleName) {
+  [bool](Get-AzRoleAssignment -ObjectId $ObjectId -RoleDefinitionName $RoleName -Scope $scope -ErrorAction Stop |
+    Where-Object { "$scope/".StartsWith("$($_.Scope.TrimEnd('/'))/", [StringComparison]::OrdinalIgnoreCase) })
+}
+
 Write-Host "Starting RBAC migration for Key Vault: $vaultName" -ForegroundColor Green
 Write-Host ""
 
@@ -200,7 +207,7 @@ Write-Host ""
         const objectId = psEscape(r.originalPolicy.objectId);
         const role = psEscape(roleName);
         // Re-runnable: skip assignments already effective at the vault (at or above its scope).
-        script.push(`if (Get-AzRoleAssignment -ObjectId "${objectId}" -RoleDefinitionName "${role}" -Scope $scope -ErrorAction Stop) {`);
+        script.push(`if (Test-AssignedAtVault -ObjectId "${objectId}" -RoleName "${role}") {`);
         script.push(`  Write-Host "Already assigned: ${role} -> ${objectId}"`);
         script.push(`} else {`);
         script.push(`  New-AzRoleAssignment \``);
