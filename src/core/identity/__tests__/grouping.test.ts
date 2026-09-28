@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   groupResultsByType,
   flattenInDisplayOrder,
-  toCoverageChartData,
+  toCoverageChartRows,
   collectDisplayGroup,
   IDENTITY_DISPLAY_GROUPS,
 } from '../grouping';
@@ -115,7 +115,7 @@ describe('IDENTITY_DISPLAY_GROUPS / collectDisplayGroup', () => {
   });
 });
 
-describe('toCoverageChartData', () => {
+describe('toCoverageChartRows', () => {
   it('derives coverage/excess/missing percentages and the display name', () => {
     const a = analysis(
       { objectId: 'usr', type: 'User' },
@@ -127,7 +127,7 @@ describe('toCoverageChartData', () => {
         roleName: 'Key Vault Secrets User',
       })
     );
-    const [datum] = toCoverageChartData([a], {}, names);
+    const [[datum]] = toCoverageChartRows([a], names);
     expect(datum.name).toBe('User');
     expect(datum.coveragePct).toBe(80);
     expect(datum.excessPct).toBe(20); // 1 / (4 covered + 1 excess)
@@ -138,20 +138,17 @@ describe('toCoverageChartData', () => {
   });
 
   it('falls back to a truncated objectId when no name resolves', () => {
-    const [datum] = toCoverageChartData(
-      [analysis({ objectId: '0123456789abcdef', type: 'Unknown' })],
-      {},
-      names
-    );
+    const [[datum]] = toCoverageChartRows([analysis({ objectId: '0123456789abcdef', type: 'Unknown' })], names);
     expect(datum.name).toBe('01234567');
   });
 
-  it('honors the selected strategy index', () => {
+  it('keeps a datum per strategy, and an empty one when there is no recommendation', () => {
     const a: MigrationAnalysis = {
       originalPolicy: makePolicy({ secrets: ['Get'] }, { objectId: 'usr' }),
       recommendations: [rec({ confidence: 10 }), rec({ confidence: 90 })],
     };
-    const [datum] = toCoverageChartData([a], { 'usr::': 1 }, names);
-    expect(datum.coveragePct).toBe(90);
+    const [row, empty] = toCoverageChartRows([a, { ...a, recommendations: [] }], names);
+    expect(row.map((d) => d.coveragePct)).toEqual([10, 90]);
+    expect(empty).toEqual([expect.objectContaining({ coveragePct: 0, role: 'None' })]);
   });
 });

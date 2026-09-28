@@ -1,6 +1,5 @@
 import { MigrationAnalysis } from '../types';
 import { IDENTITY_TYPE_ORDER } from '../constants';
-import { getPolicyKey } from './policyKey';
 import {
   ResolvedNames,
   IdentityIconKind,
@@ -86,7 +85,6 @@ export interface CoverageChartDatum {
   coveragePct: number;
   excessPct: number;
   missingPct: number;
-  fullScale: number;
   rawMissing: number;
   rawExcess: number;
   role: string;
@@ -97,33 +95,31 @@ const toPercent = (part: number, whole: number): number =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
 /**
- * Shape ordered results into the data series consumed by the coverage chart.
- * Coverage % is the selected recommendation's confidence; excess/missing % are
- * relative to the role's granted set and the policy's required set respectively.
+ * One chart row per result, with a datum per recommendation (or a single empty
+ * datum when there is none). Coverage % is the recommendation's confidence;
+ * excess/missing % are relative to the granted and required sets respectively.
  */
-export const toCoverageChartData = (
+export const toCoverageChartRows = (
   orderedResults: MigrationAnalysis[],
-  selectedRoles: Record<string, number>,
   resolvedNames: ResolvedNames
-): CoverageChartDatum[] =>
+): CoverageChartDatum[][] =>
   orderedResults.map((r) => {
-    const selectedIdx = selectedRoles[getPolicyKey(r.originalPolicy)] || 0;
-    const rec = r.recommendations[selectedIdx];
     const { displayName } = describeIdentity(r.originalPolicy, resolvedNames);
-
-    const covered = rec?.coveredPermissions?.length || 0;
-    const missing = rec?.missingPermissions?.length || 0;
-    const excess = rec?.excessPermissions?.length || 0;
-
-    return {
-      name: displayName || r.originalPolicy.objectId.substring(0, 8),
-      coveragePct: rec?.confidence || 0,
-      excessPct: toPercent(excess, covered + excess),
-      missingPct: toPercent(missing, covered + missing),
-      fullScale: 100,
-      rawMissing: missing,
-      rawExcess: excess,
-      role: rec?.roleName || 'None',
-      strategy: rec?.strategy,
-    };
+    const name = displayName || r.originalPolicy.objectId.substring(0, 8);
+    const recs = r.recommendations.length > 0 ? r.recommendations : [undefined];
+    return recs.map((rec) => {
+      const covered = rec?.coveredPermissions.length ?? 0;
+      const missing = rec?.missingPermissions.length ?? 0;
+      const excess = rec?.excessPermissions.length ?? 0;
+      return {
+        name,
+        coveragePct: rec?.confidence ?? 0,
+        excessPct: toPercent(excess, covered + excess),
+        missingPct: toPercent(missing, covered + missing),
+        rawMissing: missing,
+        rawExcess: excess,
+        role: rec?.roleName ?? 'None',
+        strategy: rec?.strategy,
+      };
+    });
   });

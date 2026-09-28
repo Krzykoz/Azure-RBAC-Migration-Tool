@@ -4,12 +4,11 @@ import { SunIcon, MoonIcon } from '../icons';
 interface HeaderProps {
   user: string | null;
   organization?: string | null;
-  onLogout: () => void;
-  theme: 'light' | 'dark';
-  onToggleTheme: () => void;
+  onLogout?: () => void;
+  onToggleTheme?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user, organization, onLogout, theme, onToggleTheme }) => {
+export const Header: React.FC<HeaderProps> = ({ user, organization, onLogout, onToggleTheme }) => {
   return (
     <header className="bg-neutral-800 text-white h-12 flex items-center justify-between px-3 sm:px-4 sticky top-0 z-50 shadow-md">
       <div className="flex min-w-0 items-center gap-2 sm:gap-4">
@@ -21,13 +20,17 @@ export const Header: React.FC<HeaderProps> = ({ user, organization, onLogout, th
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+        {/* CSS picks the icon, and the static report's script finds the button by its data attribute. */}
         <button
+          type="button"
           onClick={onToggleTheme}
-          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          data-theme-toggle
+          aria-label="Toggle dark mode"
+          title="Toggle dark mode"
           className="h-8 w-8 shrink-0 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-300 transition-colors"
-          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
         >
-          {theme === 'light' ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
+          <MoonIcon className="w-4 h-4 dark:hidden" />
+          <SunIcon className="hidden w-4 h-4 dark:block" />
         </button>
 
         {user && (

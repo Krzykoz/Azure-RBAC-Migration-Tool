@@ -1,219 +1,128 @@
-import React, { useRef, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangleIcon } from '../icons';
+import React from 'react';
 import { CoverageChartDatum } from '../../core/identity/grouping';
-import {
-  CHART_BAR_GAP,
-  CHART_BAR_WIDTH,
-  CHART_BAND,
-  CoverageSegmentType,
-  activeCoverageSegments,
-  coverageLabelPlacement,
-  coverageOverviewStats,
-  coverageSegmentStyle,
-} from '../../core/presentation/chartPresentation';
 
-// Custom shape that re-centers the active bars within each band and draws the
-// rotated percentage label, sharing all geometry decisions with the HTML export.
-const CenteredBar = (props: any) => {
-  const { x, y, height, payload, type, barWidth, gap } = props;
+/** One identity's bars: a datum per strategy, of which only the selected one is visible. */
+export interface ChartRow {
+  rowId: string;
+  selectedIdx: number;
+  data: CoverageChartDatum[];
+}
 
-  // Active segments (in canonical order), shared with the HTML export.
-  const metrics = activeCoverageSegments(payload).map((s) => s.type);
+const SEGMENTS = [
+  { key: 'coveragePct', bar: '#107c10', label: '#0b5a0b' },
+  { key: 'excessPct', bar: '#ffaa44', label: '#cc7a00' },
+  { key: 'missingPct', bar: '#d13438', label: '#a31a1e' },
+] as const;
 
-  const myIndex = metrics.indexOf(type);
-  if (myIndex === -1) return null; // Don't render if 0% or invalid
+const BAND = 80;
+const BAR = 20;
+const GAP = 2;
+const LEFT = 44;
+const TOP = 12;
+const PLOT = 260;
+const BASE = TOP + PLOT;
+const HEIGHT = BASE + 96;
 
-  // Recharts lays the three bars out at fixed standard positions
-  // (coverage 0, excess 1, missing 2); reverse-engineer the band start from the
-  // provided `x` and re-center only the *active* bars within the band.
-  const totalGroupWidth = (metrics.length * barWidth) + ((metrics.length - 1) * gap);
-
-  let defaultIndex = 0;
-  if (type === 'excess') defaultIndex = 1;
-  if (type === 'missing') defaultIndex = 2;
-
-  const standardOffset = defaultIndex * (barWidth + gap);
-  // x is where Recharts put THIS bar. So SlotStart = x - standardOffset
-  const slotStartX = x - standardOffset;
-
-  // The allocated slot is sized for the standard 3-bar layout.
-  const fullSlotWidth = (3 * barWidth) + (2 * gap);
-
-  const slotCenterX = slotStartX + fullSlotWidth / 2;
-
-  const groupStartX = slotCenterX - totalGroupWidth / 2;
-  const myNewX = groupStartX + (myIndex * (barWidth + gap));
-
-  // Colors (shared with the HTML export): label fill is a darker tint, while
-  // the halo stroke matches the bar color.
-  const style = coverageSegmentStyle(type as CoverageSegmentType);
-  const fill = style.bar;
-  const textFill = style.label;
-  const textStroke = style.bar;
-
-  // Label placement shared with the HTML export; always rotated -90°.
-  const value = payload[`${type}Pct`];
-  const text = value > 0 ? `${value}%` : '';
-
-  const place = coverageLabelPlacement(myNewX, y, height, barWidth);
-
-  return (
-    <g>
-      <path d={`M${myNewX},${y} a2,2 0 0 1 2,-2 h${barWidth - 4} a2,2 0 0 1 2,2 v${height} h-${barWidth} z`} fill={fill} />
-      {text && (
+const Bars: React.FC<{ datum: CoverageChartDatum; center: number }> = ({ datum, center }) => {
+  const active = SEGMENTS.filter((s) => datum[s.key] > 0);
+  const start = center - (active.length * (BAR + GAP) - GAP) / 2;
+  return active.map((segment, j) => {
+    const value = datum[segment.key];
+    const x = start + j * (BAR + GAP);
+    const height = (value / 100) * PLOT;
+    const y = BASE - height;
+    // Tall bars center the label inside; short ones start it at the base so it rises out.
+    const inside = height > 35;
+    const labelX = x + BAR / 2;
+    const labelY = inside ? y + height / 2 : y + height - 5;
+    return (
+      <React.Fragment key={segment.key}>
+        <rect x={x} y={y} width={BAR} height={height} rx={2} fill={segment.bar} />
         <text
-          x={place.x}
-          y={place.y}
-          fill={textFill}
-          stroke={textStroke}
+          x={labelX}
+          y={labelY}
+          fill={segment.label}
+          stroke={segment.bar}
           strokeWidth={3}
           style={{ paintOrder: 'stroke fill' }}
           fontSize={12}
           fontWeight={900}
-          textAnchor={place.anchor as any}
-          dominantBaseline={place.baseline as any}
-          transform={`rotate(-90, ${place.x}, ${place.y})`}
+          textAnchor={inside ? 'middle' : 'start'}
+          dominantBaseline={inside ? 'middle' : 'central'}
+          transform={`rotate(-90, ${labelX}, ${labelY})`}
         >
-          {text}
+          {value}%
         </text>
-      )}
-    </g>
-  );
-};
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 p-3 rounded shadow-fluent text-xs z-50 max-w-[250px]">
-        <p className="font-bold text-neutral-900 dark:text-white mb-2 truncate">{label}</p>
-        <div className="space-y-1">
-          <p className="text-neutral-700 dark:text-neutral-300">
-            Strategy: <span className="font-semibold text-brand-600 dark:text-brand-400">{data.strategy}</span>
-          </p>
-          <p className="text-neutral-700 dark:text-neutral-300">
-            Coverage: <span className={`font-semibold ${data.coveragePct > 80 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{data.coveragePct}%</span>
-          </p>
-          <p className="text-neutral-700 dark:text-neutral-300">
-            Role: <span className="font-mono text-[10px]">{data.role}</span>
-          </p>
-          {data.missingPct > 0 && (
-            <p className="text-red-600 dark:text-red-400 flex items-center gap-1">
-              <AlertTriangleIcon className="w-3 h-3" /> {data.missingPct}% Missing ({data.rawMissing})
-            </p>
-          )}
-          {data.excessPct > 0 && (
-            <p className="text-amber-600 dark:text-amber-400">
-              + {data.excessPct}% Excess ({data.rawExcess})
-            </p>
-          )}
-        </div>
-      </div>
+      </React.Fragment>
     );
-  }
-  return null;
+  });
 };
 
-interface CoverageChartProps {
-  data: CoverageChartDatum[];
-  theme: 'light' | 'dark';
-}
-
-export const CoverageChart: React.FC<CoverageChartProps> = ({ data, theme }) => {
-  // Ref and handler for horizontal scroll on mouse wheel
-  const chartScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = chartScrollRef.current;
-    if (!el) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (el.scrollWidth > el.clientWidth) {
-        e.preventDefault();
-        el.scrollLeft += e.deltaY;
-      }
-    };
-
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  const stats = coverageOverviewStats(data);
+export const CoverageChart: React.FC<{ rows: ChartRow[] }> = ({ rows }) => {
+  const width = Math.max(LEFT + rows.length * BAND + 20, 320);
+  const selected = rows.map((row) => row.data[row.selectedIdx]);
+  const sum = (key: 'coveragePct' | 'rawMissing' | 'rawExcess') => selected.reduce((total, d) => total + d[key], 0);
+  // The ids let the standalone report's script update these after a strategy switch.
+  const stats = [
+    { id: 'stat-average', value: `${Math.round(sum('coveragePct') / (selected.length || 1))}%`, label: 'Average Coverage' },
+    { id: 'stat-missing', value: sum('rawMissing'), label: 'Total Missing Permissions' },
+    { id: 'stat-excess', value: sum('rawExcess'), label: 'Total Excess Permissions' },
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4">
-      <div className="h-[340px] min-w-0 rounded border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900/30 sm:h-[392px] sm:p-4 lg:col-span-3">
+      <div className="min-w-0 rounded border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900/30 sm:p-4 lg:col-span-3">
         <h4 className="text-xs font-semibold text-neutral-700 dark:text-neutral-400 uppercase tracking-wider mb-4">Coverage Distribution</h4>
-        <div
-          ref={chartScrollRef}
-          className="overflow-x-auto overflow-y-hidden h-[calc(100%-24px)]"
-        >
-          <div style={{ width: Math.max(data.length * CHART_BAND + 64, 320), height: '100%', margin: '0 auto' }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" strokeOpacity={0.3} />
-                <XAxis
-                  dataKey="name"
-                  stroke="#9ca3af"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                  tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
-                />
-                <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} unit="%" />
-                <Tooltip
-                  content={<CustomTooltip />}
-                  cursor={{ fill: theme === 'dark' ? '#374151' : '#e5e7eb', opacity: 0.2 }}
-                />
-                <Bar
-                  dataKey="coveragePct"
-                  shape={(props: any) => <CenteredBar {...props} type="coverage" barWidth={CHART_BAR_WIDTH} gap={CHART_BAR_GAP} />}
-                  barSize={CHART_BAR_WIDTH}
-                  isAnimationActive={true}
-                />
-                <Bar
-                  dataKey="excessPct"
-                  shape={(props: any) => <CenteredBar {...props} type="excess" barWidth={CHART_BAR_WIDTH} gap={CHART_BAR_GAP} />}
-                  barSize={CHART_BAR_WIDTH}
-                  isAnimationActive={true}
-                />
-                <Bar
-                  dataKey="missingPct"
-                  shape={(props: any) => <CenteredBar {...props} type="missing" barWidth={CHART_BAR_WIDTH} gap={CHART_BAR_GAP} />}
-                  barSize={CHART_BAR_WIDTH}
-                  isAnimationActive={true}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="overflow-x-auto overflow-y-hidden">
+          <svg width={width} height={HEIGHT} viewBox={`0 0 ${width} ${HEIGHT}`} role="img" aria-label="Coverage distribution chart" className="mx-auto block">
+            {[0, 25, 50, 75, 100].map((tick) => {
+              const y = BASE - (tick / 100) * PLOT;
+              return (
+                <g key={tick}>
+                  <line x1={LEFT} y1={y} x2={width - 10} y2={y} strokeDasharray="3 3" className="stroke-neutral-200 dark:stroke-neutral-700" />
+                  <text x={LEFT - 6} y={y + 3} textAnchor="end" fontSize={10} className="fill-neutral-600 dark:fill-neutral-400">{tick}%</text>
+                </g>
+              );
+            })}
+            {rows.map((row, i) => {
+              const center = LEFT + i * BAND + BAND / 2;
+              return row.data.map((d, idx) => (
+                <g
+                  key={`${row.rowId}-${idx}`}
+                  data-row={row.rowId}
+                  data-idx={idx}
+                  data-coverage={d.coveragePct}
+                  data-missing={d.rawMissing}
+                  data-excess={d.rawExcess}
+                  // Same `hidden` toggle as the HTML panels; React's SVG types just omit the attribute.
+                  {...{ hidden: idx !== row.selectedIdx }}
+                >
+                  <title>{`${d.name}\n${d.strategy ?? 'No recommendation'}: ${d.role}\nCoverage ${d.coveragePct}% · Missing ${d.rawMissing} · Excess ${d.rawExcess}`}</title>
+                  <Bars datum={d} center={center} />
+                  <text
+                    x={center}
+                    y={BASE + 14}
+                    textAnchor="end"
+                    fontSize={10}
+                    className="fill-neutral-600 dark:fill-neutral-400"
+                    transform={`rotate(-45, ${center}, ${BASE + 14})`}
+                  >
+                    {d.name.length > 12 ? `${d.name.substring(0, 12)}...` : d.name}
+                  </text>
+                </g>
+              ));
+            })}
+          </svg>
         </div>
       </div>
 
-
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-1 lg:grid-cols-1 lg:gap-4">
-        <div className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-[120px]">
-          <div className="text-3xl font-light text-neutral-900 dark:text-white">
-            {stats.avgCoverage}%
+        {stats.map((stat) => (
+          <div key={stat.id} className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-auto">
+            <div id={stat.id} className="text-3xl font-light text-neutral-900 dark:text-white">{stat.value}</div>
+            <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">{stat.label}</div>
           </div>
-          <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Average Coverage</div>
-        </div>
-        <div className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-[120px]">
-          <div className="text-3xl font-light text-neutral-900 dark:text-white">
-            {stats.totalMissing}
-          </div>
-          <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Missing Permissions</div>
-        </div>
-        <div className="bg-white dark:bg-neutral-800 p-4 lg:p-5 rounded border border-neutral-200 dark:border-neutral-700 shadow-sm flex flex-col justify-center h-24 lg:h-[120px]">
-          <div className="text-3xl font-light text-neutral-900 dark:text-white">
-            {stats.totalExcess}
-          </div>
-          <div className="text-xs font-medium text-neutral-700 dark:text-neutral-400 mt-1">Total Excess Permissions</div>
-        </div>
+        ))}
       </div>
     </div>
   );

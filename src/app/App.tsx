@@ -127,7 +127,6 @@ function App() {
         user={armToken ? getUserNameFromToken(armToken) : (offlineData ? 'Offline User' : null)}
         organization={organizationName}
         onLogout={handleLogout}
-        theme={theme}
         onToggleTheme={toggleTheme}
       />
       <main>

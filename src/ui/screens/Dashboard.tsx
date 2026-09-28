@@ -1,18 +1,13 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MigrationStatus, KeyVault, RoleDefinition, Subscription } from '../../core/types';
 import { useAzureData } from '../hooks/useAzureData';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { useExport, ExportFormat } from '../hooks/useExport';
 import { ArrowRightIcon, LoaderIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from '../icons';
 import { SidePanel } from '../components/SidePanel';
+import { AnalysisResults } from '../components/AnalysisResults';
 import { getPolicyKey } from '../../core/identity/policyKey';
 import { isCompoundIdentity, resolveIdentityType } from '../../core/identity/identity';
-
-// Lazily loaded so the heavy charting library (recharts) is only fetched once an
-// analysis completes, keeping the initial bundle small.
-const AnalysisResults = lazy(() =>
-  import('../components/AnalysisResults').then((m) => ({ default: m.AnalysisResults }))
-);
 
 interface DashboardProps {
   armToken: string;
@@ -436,24 +431,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             {/* Complete State - Show Results */}
             {status === MigrationStatus.COMPLETE && (
-              <Suspense
-                fallback={
-                  <div className="h-full flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-400">
-                    <LoaderIcon className="animate-spin w-6 h-6 text-brand-600 mb-3" />
-                    <p className="text-sm">Loading results…</p>
-                  </div>
-                }
-              >
-                <AnalysisResults
-                  results={results}
-                  selectedRoles={selectedRoles}
-                  setSelectedRoles={setSelectedRoles}
-                  resolvedNames={resolvedNames}
-                  theme={theme}
-                  selectedForExport={selectedForExport}
-                  setSelectedForExport={setSelectedForExport}
-                />
-              </Suspense>
+              <AnalysisResults
+                results={results}
+                selectedRoles={selectedRoles}
+                resolvedNames={resolvedNames}
+                onSelectRole={(policyKey, recIdx) => setSelectedRoles((prev) => ({ ...prev, [policyKey]: recIdx }))}
+                selection={{ selected: selectedForExport, onChange: setSelectedForExport }}
+              />
             )}
           </div>
         </div>

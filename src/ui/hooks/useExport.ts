@@ -1,7 +1,6 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { MigrationAnalysis, IdentityType } from '../../core/types';
 import { exportToCSV, exportToJSON, exportToPowerShell, parseVaultResourceId } from '../../core/export/tabular';
-import { exportToHtml } from '../../core/export/html';
 import { downloadFile } from '../../core/export/download';
 import { getPolicyKey } from '../../core/identity/policyKey';
 
@@ -21,8 +20,18 @@ interface UseExportProps {
 interface UseExportResult {
   showExportMenu: boolean;
   setShowExportMenu: Dispatch<SetStateAction<boolean>>;
-  handleExport: (format: ExportFormat) => void;
+  handleExport: (format: ExportFormat) => Promise<void>;
 }
+
+/** The app's own compiled CSS, inlined into the HTML report. Cross-origin sheets are unreadable and skipped. */
+const collectAppCss = (): string =>
+  Array.from(document.styleSheets).flatMap((sheet) => {
+    try {
+      return Array.from(sheet.cssRules, (rule) => rule.cssText);
+    } catch {
+      return [];
+    }
+  }).join('\n');
 
 /** Generates and downloads the selected export format for the chosen identities. */
 export const useExport = ({
@@ -38,7 +47,7 @@ export const useExport = ({
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const handleExport = useCallback(
-    (format: ExportFormat): void => {
+    async (format: ExportFormat): Promise<void> => {
       // Filter results by selection
       const filteredResults = results.filter((r) =>
         selectedForExport.has(getPolicyKey(r.originalPolicy))
@@ -84,14 +93,14 @@ export const useExport = ({
           break;
         }
         case 'html': {
-          const html = exportToHtml(
-            filteredResults,
-            selectedRoles,
-            resolvedNames,
+          // Loaded on demand: the report pulls in react-dom/server.
+          const { exportToHtml } = await import('../export/report');
+          const html = exportToHtml(filteredResults, selectedRoles, resolvedNames, {
             theme,
             vaultName,
-            subscriptionId
-          );
+            subscriptionId,
+            css: collectAppCss(),
+          });
           downloadFile(html, `${vaultName}-analysis-${timestamp}.html`, 'text/html');
           break;
         }
