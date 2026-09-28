@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RoleDefinition, Subscription } from '../../core/types';
 import { getBuiltInKeyVaultRoles } from '../../core/roles/builtIn';
 import { parseRolesJson } from '../../core/roles/normalization';
@@ -51,35 +51,34 @@ export const useManualRoles = (): UseManualRoles => {
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [tokenRoles, setTokenRoles] = useState<RoleDefinition[]>([]);
   const [tokenError, setTokenError] = useState<string | null>(null);
-  const tokenRef = useRef('');
-  const selectedSubRef = useRef('');
-  const subscriptionRequest = useRef(0);
-  const roleRequest = useRef(0);
-  const mounted = useRef(false);
+  // The in-flight load; superseded by any newer load or input change, and aborted on unmount.
+  const request = useRef(new AbortController());
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      subscriptionRequest.current++;
-      roleRequest.current++;
-    };
+    request.current = new AbortController();
+    return () => request.current.abort();
   }, []);
 
-  const setToken = useCallback((value: string) => {
-    if (value === tokenRef.current) return;
-    tokenRef.current = value;
-    subscriptionRequest.current++;
-    roleRequest.current++;
-    selectedSubRef.current = '';
-    setTokenState(value);
-    setSubscriptions([]);
-    setSelectedSubId('');
+  /** Cancel whatever is loading and clear everything derived from the token and subscription. */
+  const restart = (clearSubscriptions: boolean): AbortSignal => {
+    request.current.abort();
+    request.current = new AbortController();
+    if (clearSubscriptions) {
+      setSubscriptions([]);
+      setSelectedSubId('');
+    }
     setTokenRoles([]);
     setTokenError(null);
     setLoadingSubs(false);
     setLoadingRoles(false);
-  }, []);
+    return request.current.signal;
+  };
+
+  const setToken = (value: string) => {
+    if (value === token) return;
+    restart(true);
+    setTokenState(value);
+  };
 
   const builtInRoles = useMemo(() => getBuiltInKeyVaultRoles(), []);
 
@@ -97,37 +96,20 @@ export const useManualRoles = (): UseManualRoles => {
     try {
       setPastedRoles(parseRolesJson(pasteJson));
       setPasteError(null);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setPastedRoles([]);
-      setPasteError(e?.message || 'Invalid JSON.');
+      setPasteError(e instanceof Error ? e.message : 'Invalid JSON.');
     }
   }, [pasteJson, roleSource]);
 
   const selectSubscription = (id: string) => {
-    subscriptionRequest.current++;
-    roleRequest.current++;
-    selectedSubRef.current = id;
+    restart(false);
     setSelectedSubId(id);
-    setTokenRoles([]);
-    setTokenError(null);
-    setLoadingSubs(false);
-    setLoadingRoles(false);
   };
 
   const loadSubscriptions = async () => {
-    const request = ++subscriptionRequest.current;
-    roleRequest.current++;
-    const requestedToken = tokenRef.current.trim();
-    const isCurrent = () => mounted.current && request === subscriptionRequest.current &&
-      requestedToken === tokenRef.current.trim();
-    selectedSubRef.current = '';
-    setTokenError(null);
-    setSubscriptions([]);
-    setSelectedSubId('');
-    setTokenRoles([]);
-    setLoadingSubs(false);
-    setLoadingRoles(false);
-
+    const signal = restart(true);
+    const requestedToken = token.trim();
     if (!requestedToken) {
       setTokenError('Paste a Management token first.');
       return;
@@ -135,46 +117,38 @@ export const useManualRoles = (): UseManualRoles => {
 
     setLoadingSubs(true);
     try {
-      await validateToken(requestedToken);
-      if (!isCurrent()) return;
-      const subs = await getSubscriptions(requestedToken);
-      if (!isCurrent()) return;
+      await validateToken(requestedToken, signal);
+      signal.throwIfAborted();
+      const subs = await getSubscriptions(requestedToken, signal);
+      signal.throwIfAborted();
       if (subs.length === 0) {
         setTokenError('Token is valid, but no subscriptions are visible to it.');
         return;
       }
       setSubscriptions(subs);
-      selectedSubRef.current = subs[0].subscriptionId;
       setSelectedSubId(subs[0].subscriptionId);
     } catch (e: unknown) {
-      if (!isCurrent()) return;
-      setTokenError(e instanceof Error ? e.message : 'Failed to validate token.');
+      if (!signal.aborted) setTokenError(e instanceof Error ? e.message : 'Failed to validate token.');
     } finally {
-      if (isCurrent()) setLoadingSubs(false);
+      if (!signal.aborted) setLoadingSubs(false);
     }
   };
 
   const loadRoles = async () => {
-    const request = ++roleRequest.current;
-    const requestedToken = tokenRef.current.trim();
-    const requestedSub = selectedSubRef.current;
-    const isCurrent = () => mounted.current && request === roleRequest.current &&
-      requestedToken === tokenRef.current.trim() && requestedSub === selectedSubRef.current;
-    setTokenError(null);
-    setTokenRoles([]);
-    setLoadingRoles(false);
+    const signal = restart(false);
+    const requestedToken = token.trim();
     if (!requestedToken) {
       setTokenError('Paste a Management token first.');
       return;
     }
-    if (!requestedSub) {
+    if (!selectedSubId) {
       setTokenError('Select a subscription first.');
       return;
     }
     setLoadingRoles(true);
     try {
-      const roles = await getRoleDefinitions(requestedToken, requestedSub);
-      if (!isCurrent()) return;
+      const roles = await getRoleDefinitions(requestedToken, selectedSubId, signal);
+      signal.throwIfAborted();
       if (roles.length === 0) {
         setTokenError(
           'Connected, but no Key Vault roles were found in the selected subscription.'
@@ -183,10 +157,9 @@ export const useManualRoles = (): UseManualRoles => {
       }
       setTokenRoles(roles);
     } catch (e: unknown) {
-      if (!isCurrent()) return;
-      setTokenError(e instanceof Error ? e.message : 'Failed to load role definitions.');
+      if (!signal.aborted) setTokenError(e instanceof Error ? e.message : 'Failed to load role definitions.');
     } finally {
-      if (isCurrent()) setLoadingRoles(false);
+      if (!signal.aborted) setLoadingRoles(false);
     }
   };
 
