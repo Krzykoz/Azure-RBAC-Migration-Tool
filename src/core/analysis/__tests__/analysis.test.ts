@@ -181,19 +181,22 @@ describe('runWeightedAnalysis — wildcard matching subtleties', () => {
 });
 
 describe('analyzePolicies — duplicate strategy merging', () => {
-  it('does not merge a comma-bearing role name with a different two-role combination', () => {
+  it('does not merge a comma-bearing role name with a different multi-role combination', () => {
+    // One extra role costs less than one excess action for every strategy except Max Coverage,
+    // whose third role (0.2) outweighs the single role's purge excess (0.15).
     const roles = [
-      makeRole('A,B', [ACTIONS.SECRET_GET, ACTIONS.SECRET_DELETE, ACTIONS.SECRET_PURGE]),
+      makeRole('A,B,C', [ACTIONS.SECRET_GET, ACTIONS.SECRET_DELETE, ACTIONS.SECRET_RECOVER, ACTIONS.SECRET_PURGE]),
       makeRole('A', [ACTIONS.SECRET_GET]),
       makeRole('B', [ACTIONS.SECRET_DELETE]),
+      makeRole('C', [ACTIONS.SECRET_RECOVER]),
     ];
-    const [analysis] = analyzePolicies([makePolicy({ secrets: ['Get', 'Delete'] })], roles);
+    const [analysis] = analyzePolicies([makePolicy({ secrets: ['Get', 'Delete', 'Recover'] })], roles);
     expect(analysis.recommendations).toHaveLength(2);
-    const narrow = analysis.recommendations.find((rec) => rec.roleNames.length === 2);
+    const narrow = analysis.recommendations.find((rec) => rec.roleNames.length === 3);
     expect(narrow?.strategy).toContain('Minimize Excess');
     expect(narrow?.excessPermissions).toEqual([]);
-    expect(analysis.recommendations.find((rec) => rec.roleNames[0] === 'A,B')?.strategy)
-      .not.toContain('Minimize Excess');
+    expect(analysis.recommendations.find((rec) => rec.roleNames[0] === 'A,B,C')?.strategy)
+      .toBe('Max Coverage');
   });
 
   it('merges strategies that yield identical role sets into one labelled recommendation', () => {

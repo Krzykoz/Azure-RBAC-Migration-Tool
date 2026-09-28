@@ -15,12 +15,18 @@ export const AZURE_ENDPOINTS = {
 export interface StrategyConfig {
   name: string;
   description: string;
+  /**
+   * Score of a role set: covered × coverage − excess × excess − (roles − 1) × roleCount.
+   * The best-scoring set wins; below `threshold` the strategy reports No Match.
+   */
   weights: {
     coverage: number;
     excess: number;
     roleCount: number;
   };
   threshold: number;
+  /** Maximize coverage first and use the score only among maximum-coverage sets (ignores threshold). */
+  coverageFirst?: boolean;
 }
 
 export const ANALYSIS_STRATEGIES: readonly StrategyConfig[] = [
@@ -32,7 +38,8 @@ export const ANALYSIS_STRATEGIES: readonly StrategyConfig[] = [
       excess: 0.15,
       roleCount: 0.1,
     },
-    threshold: -100,
+    threshold: 0,
+    coverageFirst: true,
   },
   {
     name: 'Minimize Excess',
