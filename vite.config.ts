@@ -29,16 +29,4 @@ export default defineConfig({
     port: Number(process.env.PORT) || 3000,
   },
   plugins: [react(), contentSecurityPolicy()],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Keep the React runtime in its own long-lived, cacheable chunk.
-          // recharts is intentionally left out so it stays in the lazily loaded
-          // results chunk rather than being pulled into the initial bundle.
-          'react-vendor': ['react', 'react-dom'],
-        },
-      },
-    },
-  },
 });

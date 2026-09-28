@@ -2,7 +2,7 @@ import React from 'react';
 import { CoverageChartDatum } from '../../core/identity/grouping';
 
 /** One identity's bars: a datum per strategy, of which only the selected one is visible. */
-export interface ChartRow {
+interface ChartRow {
   rowId: string;
   selectedIdx: number;
   data: CoverageChartDatum[];

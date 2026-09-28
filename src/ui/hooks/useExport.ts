@@ -4,7 +4,7 @@ import { downloadFile } from '../../core/export/download';
 import { getPolicyKey } from '../../core/identity/policyKey';
 
 export const EXPORT_FORMATS = ['csv', 'json', 'powershell', 'html'] as const;
-export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 interface UseExportProps {
   results: MigrationAnalysis[];
@@ -71,7 +71,7 @@ export const useExport = ({
         break;
       case 'powershell':
         downloadFile(
-          exportToPowerShell(selected, selectedRoles, resolvedNames, vaultName, subscriptionId, vaultResourceId),
+          exportToPowerShell(selected, selectedRoles, resolvedNames, vaultResourceId),
           `${vaultName}-migration-${timestamp}.ps1`,
           'text/plain'
         );

@@ -177,7 +177,7 @@ describe('parseVaultResourceId', () => {
     `${vaultResourceId}\n`,
   ])('rejects invalid or synthetic scope %j with actionable guidance', (scope) => {
     expect(() => parseVaultResourceId(scope)).toThrow('Copy the Resource ID from the target vault in Azure');
-    expect(() => exportToPowerShell([], {}, {}, 'myvault', subscriptionId, scope))
+    expect(() => exportToPowerShell([], {}, {}, scope))
       .toThrow('valid full Key Vault resource ID');
   });
 });
@@ -188,8 +188,6 @@ describe('exportToPowerShell', () => {
       [makeAnalysis({ objectId: 'u1', type: 'User' }, makeRec())],
       {},
       resolved({ u1: { name: 'Alice', type: 'User' } }),
-      'myvault',
-      subscriptionId,
       vaultResourceId
     );
     expect(ps).toContain('$vaultName = "myvault"');
@@ -205,8 +203,6 @@ describe('exportToPowerShell', () => {
       [makeAnalysis({ objectId: 'sp1', applicationId: 'app1', type: 'Application' }, makeRec())],
       {},
       resolved({ sp1: { name: 'MySP', type: 'ServicePrincipal' } }),
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('# Compound Identities (1)');
@@ -227,8 +223,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       {},
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('# SKIPPED: Already fully covered by existing direct-principal RBAC assignments');
@@ -246,8 +240,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       {},
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps.match(/# SKIPPED:/g)).toHaveLength(2);
@@ -271,8 +263,6 @@ describe('exportToPowerShell', () => {
         }],
         {},
         {},
-        'myvault',
-        subscriptionId,
         vaultResourceId
       );
       expect(ps).toContain('# SKIPPED: Role "Key Vault Secrets User" is already present in direct-principal RBAC coverage');
@@ -285,7 +275,7 @@ describe('exportToPowerShell', () => {
   );
 
   it('guards each assignment so a partially failed run can be re-run', () => {
-    const ps = exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, 'v', 's', vaultResourceId);
+    const ps = exportToPowerShell([makeAnalysis({ objectId: 'u1' }, makeRec())], {}, {}, vaultResourceId);
     const guard = 'if (Get-AzRoleAssignment -ObjectId "u1" -RoleDefinitionName "Key Vault Secrets User" -Scope $scope -ErrorAction Stop) {';
     expect(ps).toContain(guard);
     expect(ps.indexOf(guard)).toBeLessThan(ps.indexOf('New-AzRoleAssignment'));
@@ -293,7 +283,7 @@ describe('exportToPowerShell', () => {
   });
 
   it('requires an explicit full scope instead of looking up or inventing an offline target', () => {
-    expect(() => exportToPowerShell([], {}, {}, 'myvault', subscriptionId))
+    expect(() => exportToPowerShell([], {}, {}, ''))
       .toThrow('valid full Key Vault resource ID');
   });
 
@@ -302,15 +292,11 @@ describe('exportToPowerShell', () => {
       [makeAnalysis({}, makeRec())],
       {},
       {},
-      'synthetic-vault',
-      'offline-sub',
       vaultResourceId
     );
     expect(ps).toContain('# Vault: myvault');
     expect(ps).toContain(`$subscriptionId = "${subscriptionId}"`);
     expect(ps).toContain(`$scope = "${vaultResourceId}"`);
-    expect(ps).not.toContain('synthetic-vault');
-    expect(ps).not.toContain('offline-sub');
     expect(ps).not.toContain('Get-AzKeyVault');
     expect(ps).toContain('$ErrorActionPreference = "Stop"');
     expect(ps).toContain('Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop | Out-Null');
@@ -330,8 +316,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       resolved({ u1: { name: 'Alice', type: 'User' } }),
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('# No matching role found for this identity');
@@ -341,7 +325,7 @@ describe('exportToPowerShell', () => {
   it.each(['\u201c', '\u201d', '\u201e'])('escapes PowerShell smart double quotes: %s', (quote) => {
     const ps = exportToPowerShell(
       [makeAnalysis({ objectId: `Object${quote}Id` }, makeRec({ roleNames: [`Role${quote}Name`] }))],
-      {}, {}, 'v', 's', vaultResourceId
+      {}, {}, vaultResourceId
     );
     expect(ps).toContain('-RoleDefinitionName "Role`' + quote + 'Name"');
     expect(ps).toContain('-ObjectId "Object`' + quote + 'Id"');
@@ -357,8 +341,6 @@ describe('exportToPowerShell', () => {
       ],
       {},
       resolved({ u1: { name: 'Alice', type: 'User' } }),
-      'v',
-      's',
       vaultResourceId
     );
     expect(ps).toContain('-ObjectId "o`$1"'); // $ -> `$

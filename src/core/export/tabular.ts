@@ -118,11 +118,8 @@ export const exportToPowerShell = (
   results: MigrationAnalysis[],
   selectedRoles: Record<string, number>,
   resolvedNames: Record<string, { name: string; type: IdentityType }>,
-  _vaultName: string,
-  _subscriptionId: string,
-  vaultResourceId?: string
+  scope: string
 ): string => {
-  const scope = vaultResourceId || '';
   const { vaultName, subscriptionId } = parseVaultResourceId(scope);
   const script = [`# Azure Key Vault RBAC Migration Script
 # Generated: ${new Date().toISOString()}
