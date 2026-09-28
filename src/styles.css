@@ -73,3 +73,15 @@
 .icon-pop {
   animation: icon-pop 0.2s ease-out both;
 }
+
+/* Thin neutral scrollbars for scrolling panels. */
+.overflow-x-auto,
+.overflow-y-auto,
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-neutral-500) var(--color-neutral-100);
+}
+
+.dark :is(.overflow-x-auto, .overflow-y-auto, .scrollbar-thin) {
+  scrollbar-color: var(--color-neutral-700) var(--color-neutral-800);
+}
