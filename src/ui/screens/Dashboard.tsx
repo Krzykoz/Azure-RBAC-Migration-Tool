@@ -3,7 +3,7 @@ import { MigrationStatus, KeyVault, RoleDefinition, Subscription } from '../../c
 import { useAzureData } from '../hooks/useAzureData';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { useExport, ExportFormat } from '../hooks/useExport';
-import { ArrowRightIcon, LoaderIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from '../icons';
+import { ArrowRightIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from '../icons';
 import { SidePanel } from '../components/SidePanel';
 import { AnalysisResults } from '../components/AnalysisResults';
 import { getPolicyKey } from '../../core/identity/policyKey';
@@ -23,6 +23,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   offlineData,
 }) => {
   const [includeCustomRoles, setIncludeCustomRoles] = useState(true);
+  const [analyzed, setAnalyzed] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const {
@@ -35,9 +36,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     availableRoles,
     roleAssignments,
     resolvedNames,
-    status,
+    status: dataStatus,
     error: azureError,
-    setStatus,
     resolveIdentities,
   } = useAzureData({ armToken, graphToken, offlineData });
 
@@ -132,47 +132,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [resolvedNames, results, setSelectedForExport]);
 
+  // Data loading states win; otherwise the outcome of the last analysis run.
+  const status =
+    dataStatus !== MigrationStatus.IDLE ? dataStatus
+      : analysisError ? MigrationStatus.ERROR
+        : analyzed ? MigrationStatus.COMPLETE
+          : MigrationStatus.IDLE;
+
+  const resetAnalysis = () => {
+    setAnalyzed(false);
+    setAnalysisError(null);
+    setShowExportMenu(false);
+    clearResults();
+  };
+
   const handleAnalyze = () => {
     if (!selectedVault) return;
     setAnalysisError(null);
-    setStatus(MigrationStatus.ANALYZING);
-
     try {
       runAnalysis();
-      setStatus(MigrationStatus.COMPLETE);
+      setAnalyzed(true);
     } catch (err) {
       console.error(err);
       setAnalysisError(err instanceof Error ? err.message : 'Analysis failed.');
-      setStatus(MigrationStatus.ERROR);
     }
   };
 
   const handleSelectVault = (vault: KeyVault) => {
     setSelectedVault(vault);
-    setAnalysisError(null);
-    setShowExportMenu(false);
-    setStatus(MigrationStatus.IDLE);
-    clearResults();
+    resetAnalysis();
   };
 
   const handleSelectSubscription = (sub: Subscription | null) => {
     if (sub === selectedSub) return;
     setSelectedSub(sub);
-    setSelectedVault(null);
-    setAnalysisError(null);
-    setShowExportMenu(false);
-    setStatus(sub ? MigrationStatus.LOADING : MigrationStatus.IDLE);
-    clearResults();
+    resetAnalysis();
   };
 
   const resetToSubscriptions = () => handleSelectSubscription(null);
 
   const resetToVaults = () => {
     setSelectedVault(null);
-    setAnalysisError(null);
-    setShowExportMenu(false);
-    if (status !== MigrationStatus.LOADING) setStatus(MigrationStatus.IDLE);
-    clearResults();
+    resetAnalysis();
   };
 
   const builtInRoleCount = availableRoles.filter(
@@ -283,7 +284,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         checked={includeCustomRoles}
                         onChange={(e) => setIncludeCustomRoles(e.target.checked)}
                         disabled={
-                          status === MigrationStatus.ANALYZING ||
                           status === MigrationStatus.COMPLETE ||
                           status === MigrationStatus.LOADING ||
                           !!azureError
@@ -292,8 +292,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="w-9 h-5 bg-neutral-300 dark:bg-neutral-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
                     </div>
                     <span
-                      className={`text-sm font-medium ${status === MigrationStatus.ANALYZING ||
-                          status === MigrationStatus.COMPLETE
+                      className={`text-sm font-medium ${status === MigrationStatus.COMPLETE
                           ? 'text-neutral-400'
                           : 'text-neutral-700 dark:text-neutral-300'
                         }`}
@@ -306,7 +305,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <button
                     onClick={handleAnalyze}
                     disabled={
-                      status === MigrationStatus.ANALYZING ||
                       status === MigrationStatus.COMPLETE ||
                       status === MigrationStatus.LOADING ||
                       !!azureError
@@ -316,22 +314,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm'
                       }`}
                   >
-                    {status === MigrationStatus.ANALYZING && (
-                      <>
-                        <LoaderIcon className="animate-spin w-4 h-4" /> Processing...
-                      </>
-                    )}
-                    {status === MigrationStatus.COMPLETE && (
+                    {status === MigrationStatus.COMPLETE ? (
                       <>
                         <CheckCircleIcon className="w-4 h-4" /> Analysis Complete
                       </>
+                    ) : (
+                      <>
+                        Run Analysis <ArrowRightIcon className="w-4 h-4" />
+                      </>
                     )}
-                    {status !== MigrationStatus.ANALYZING &&
-                      status !== MigrationStatus.COMPLETE && (
-                        <>
-                          Run Analysis <ArrowRightIcon className="w-4 h-4" />
-                        </>
-                      )}
                   </button>
                 </div>
               )}
@@ -410,22 +401,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Analyzing State */}
-            {status === MigrationStatus.ANALYZING && (
-              <div className="h-full flex flex-col items-center justify-center">
-                <div className="relative w-20 h-20 mb-8">
-                  <div className="absolute inset-0 border-4 border-neutral-200 dark:border-neutral-700 rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-brand-600 rounded-full border-t-transparent animate-spin"></div>
-                </div>
-                <p className="text-lg font-medium text-neutral-900 dark:text-neutral-200">
-                  Mapping Roles...
-                </p>
-                <p className="text-sm text-neutral-700 dark:text-neutral-400 mt-2 max-w-md text-center">
-                  Applying 3 weighted strategies to suggest RBAC mappings.
-                </p>
               </div>
             )}
 

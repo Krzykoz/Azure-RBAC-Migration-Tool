@@ -33,7 +33,6 @@ interface UseAzureDataResult {
   resolvedNames: Record<string, { name: string; type: IdentityType }>;
   status: MigrationStatus;
   error: string | null;
-  setStatus: (status: MigrationStatus) => void;
   resolveIdentities: (objectIds: string[], applicationIds?: string[]) => Promise<void>;
 }
 
@@ -196,7 +195,6 @@ export const useAzureData = ({
     resolvedNames,
     status,
     error,
-    setStatus,
     resolveIdentities,
   };
 };

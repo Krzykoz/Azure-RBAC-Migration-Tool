@@ -6,7 +6,6 @@
 export enum MigrationStatus {
   IDLE = 'IDLE',
   LOADING = 'LOADING',
-  ANALYZING = 'ANALYZING',
   COMPLETE = 'COMPLETE',
   ERROR = 'ERROR',
 }
