@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MigrationStatus, KeyVault, RoleDefinition, Subscription } from '../../core/types';
 import { useAzureData } from '../hooks/useAzureData';
 import { useAnalysis } from '../hooks/useAnalysis';
-import { useExport, ExportFormat } from '../hooks/useExport';
+import { useExport, EXPORT_FORMATS } from '../hooks/useExport';
 import { ArrowRightIcon, ShieldCheckIcon, CheckCircleIcon, DownloadIcon } from '../icons';
 import { SidePanel } from '../components/SidePanel';
 import { AnalysisResults } from '../components/AnalysisResults';
@@ -57,7 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     includeCustomRoles,
   });
 
-  const { showExportMenu, setShowExportMenu, handleExport } = useExport({
+  const { exportBlocker, handleExport } = useExport({
     results,
     selectedRoles,
     resolvedNames,
@@ -67,23 +67,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     vaultResourceId: selectedVault?.id || '',
     theme,
   });
-
-  // Close the export dropdown when clicking outside of it.
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        exportMenuRef.current &&
-        event.target instanceof Node &&
-        !exportMenuRef.current.contains(event.target)
-      ) {
-        setShowExportMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showExportMenu, setShowExportMenu]);
 
   // Resolve identities when results change
   useEffect(() => {
@@ -142,7 +125,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const resetAnalysis = () => {
     setAnalyzed(false);
     setAnalysisError(null);
-    setShowExportMenu(false);
     clearResults();
   };
 
@@ -246,30 +228,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {selectedVault ? `Analysis: ${selectedVault.name}` : 'Migration Workspace'}
             </h2>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-              {/* Export Menu */}
+              {/* Export Menu: a native popover anchored under its button (light dismiss and Esc for free) */}
               {status === MigrationStatus.COMPLETE && (
-                <div className="relative w-full sm:w-auto" ref={exportMenuRef}>
+                <>
                   <button
-                    onClick={() => setShowExportMenu(!showExportMenu)}
-                    aria-expanded={showExportMenu}
-                    className="w-full px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 transition-colors sm:w-auto"
+                    type="button"
+                    popoverTarget="export-menu"
+                    className="[anchor-name:--export-menu] w-full px-4 py-1.5 rounded text-sm font-medium bg-neutral-600 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 transition-colors sm:w-auto"
                   >
                     <DownloadIcon className="w-4 h-4" /> Export
                   </button>
-                  {showExportMenu && (
-                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded shadow-lg z-10 min-w-[160px]">
-                      {(['csv', 'json', 'powershell', 'html'] as ExportFormat[]).map((format) => (
+                  <div
+                    id="export-menu"
+                    popover="auto"
+                    className="[position-anchor:--export-menu] [top:anchor(bottom)] [right:anchor(right)] bottom-auto left-auto m-0 mt-1 p-0 max-w-xs min-w-[160px] bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700 rounded shadow-lg"
+                  >
+                    {EXPORT_FORMATS.map((format) => {
+                      const blocker = exportBlocker(format);
+                      return (
                         <button
                           key={format}
-                          onClick={() => handleExport(format)}
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                          type="button"
+                          popoverTarget="export-menu"
+                          popoverTargetAction="hide"
+                          disabled={blocker !== null}
+                          onClick={() => void handleExport(format)}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:cursor-not-allowed disabled:text-neutral-600 disabled:hover:bg-transparent transition-colors"
                         >
                           Export as {format.toUpperCase()}
+                          {blocker && <span className="block text-[10px] leading-snug text-neutral-700 dark:text-neutral-400">{blocker}</span>}
                         </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
 
               {/* Analysis Controls */}
